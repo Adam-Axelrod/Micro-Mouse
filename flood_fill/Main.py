@@ -12,6 +12,25 @@ class maze:
     completed = False
 
     def get_path():
+        return maze.path
+    
+    def get_walls():
+        return maze.walls
+    
+    def calculate_distances():
+        maze.distances = API.getDistances()
+        log("Distances: {}".format(maze.distances))
+
+    def get_distances():
+        return maze.distances
+    
+    def add_wall(x, y, direction):
+        if (x, y, direction) not in maze.walls:
+            maze.walls.append((x, y, direction))
+            API.setWall(x, y, direction)
+            log("Added wall at: ({}, {})".format(x, y, direction))
+    
+    def calculate_path():
         x, y = mouse.get_position()
         while maze.completed:
             current_distance = maze.distances[x][y]
@@ -33,31 +52,8 @@ class maze:
             maze.path.append(next_move)
             x, y = next_move
         log("New Path: {}".format(maze.path))
-            
     
-    def get_walls():
-        maze.walls = API.getWalls()
-        log("Walls: {}".format(maze.walls))
-    
-    def calculate_distances():
-        maze.distances = API.getDistances()
-        log("Distances: {}".format(maze.distances))
 
-    def get_distances():
-        maze.distances = API.getDistances()
-        log("Distances: {}".format(maze.distances))
-    
-    def calculate_path():
-        maze.distances = API.getDistances()
-        log("Distances: {}".format(maze.distances))
-        maze.path = API.getMousePath()
-        log("New Path: {}".format(maze.path))
-    
-    def add_wall(x, y, direction):
-        if (x, y, direction) not in maze.walls:
-            maze.walls.append((x, y, direction))
-            API.setWall(x, y, direction)
-            log("Added wall at: ({}, {})".format(x, y, direction))
     
 
 class mouse:
@@ -66,13 +62,9 @@ class mouse:
     blocked = False
 
     def get_position():
-        mouse.pos = API.getMousePos()
-        log("Mouse Position: {}".format(mouse.pos))
         return mouse.pos
 
     def get_heading():
-        mouse.direction = API.getMouseDir()
-        log("Mouse Heading: {}".format(mouse.heading))
         return mouse.heading
 
     def turn_left():
