@@ -5,6 +5,7 @@ def log(string):
     sys.stderr.write("{}\n".format(string))
     sys.stderr.flush()
 
+'''
 class Maze:
     walls = []
     path = []
@@ -52,9 +53,7 @@ class Maze:
             Maze.path.append(next_move)
             x, y = next_move
         log("New Path: {}".format(Maze.path))
-    
-
-    
+ 
 
 class Mouse:
     pos = []
@@ -116,7 +115,6 @@ class Mouse:
             Maze.add_wall(Mouse.pos[0], Mouse.pos[1], "w")
         if wallright:
             Maze.add_wall(Mouse.pos[0], Mouse.pos[1], "e")
-        
 
 def main():
     log("Running...")
@@ -129,6 +127,21 @@ def main():
             Maze.calculate_path()
             break
         Mouse.move_along_path()
+'''
+
+
+"""hug right wall"""
+def main():
+    log("Running Write Mode...")
+    API.setColor(0, 0, "G")
+    API.setText(0, 0, "abc")
+    while True:
+        if not API.wallRight():
+            API.turnRight()
+        while API.wallFront():
+            API.turnLeft()
+        API.moveForward()
+
 
 if __name__ == "__main__":
     main()
