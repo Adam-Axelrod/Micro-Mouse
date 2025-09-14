@@ -1,5 +1,9 @@
 import API
 import sys
+import memorise
+
+'''will create a mouse that uses memorise.py to map the maze as it goes along
+it will then use flood fill to find the shortest path to the centre'''
 
 def log(string):
     sys.stderr.write("{}\n".format(string))

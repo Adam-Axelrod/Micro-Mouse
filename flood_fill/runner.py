@@ -1,5 +1,8 @@
 import API
 import sys
+import memorise
+
+'''will use builder.py's output to run the maze in read mode'''
 
 def log(string):
     sys.stderr.write("{}\n".format(string))
@@ -132,7 +135,7 @@ def main():
 
 """hug right wall"""
 def main():
-    log("Running...")
+    log("Running Write Mode...")
     API.setColor(0, 0, "G")
     API.setText(0, 0, "abc")
     while True:
