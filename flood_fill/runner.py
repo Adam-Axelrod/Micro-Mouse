@@ -1,6 +1,6 @@
 import API
 import sys
-import memorise
+import flood_fill.memorise as memorise
 
 '''will use builder.py's output to run the maze in read mode'''
 
