@@ -9,6 +9,7 @@ def main():
     log("Running...")
     API.setColor(0, 0, "G")
     API.setText(0, 0, "abc")
+    log(API.mazeWidth())
     while True:
         if not API.wallLeft():
             API.turnLeft()
