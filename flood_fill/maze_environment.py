@@ -1,6 +1,10 @@
-import math
+# import math
 import pygame
+import sys
+
 import maze_loader
+from mouse import Mouse # player
+from auto_mouse import AutoMouse # auto
 
 """
 Maze format: [X Y N E S W] <-- each cell is separated with a newline
@@ -38,101 +42,55 @@ def build_walls(walls, max_y):
     return wall_objects
 
 
-"""Controllable mouse"""
-class Mouse:
-    def __init__(self, x, y):
-
-        """x, y position in maze coordinates (not pixels) + size based on TILE_SIZE"""
-
-        self.width = int(TILE_SIZE * 0.3)
-        self.height = int(TILE_SIZE * 0.5)
-        self.pos_x = x * TILE_SIZE
-        self.pos_y = y * TILE_SIZE
-        self.rect = pygame.Rect(self.pos_x, self.pos_y, self.width, self.height)
-        self.base_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-        self.impulse = 0.3        
-        self.angle = -90
-        self.speed = 0
-        pygame.draw.rect(self.base_surface, GREEN, (0, 0, self.width, self.height))
-
-    def move(self, speed, angle, walls):
-
-        """Move mouse with collision detection"""
-
-        self.angle = angle
-        self.speed = speed
-        dx, dy = self.angle_to_single_axis(speed, angle)
-        collided = False
-
-        if dx != 0: # x axis movement
-            self.pos_x += dx
-            self.rect.x = int(self.pos_x)
-            for wall in walls:
-                if self.rect.colliderect(wall):
-                    collided = True
-                    if dx > 0:
-                        self.rect.right = wall.left
-                        self.pos_x = self.rect.x
-                    elif dx < 0:
-                        self.rect.left = wall.right
-                        self.pos_x = self.rect.x
-
-        if dy != 0: # y axis movement
-            self.pos_y += dy
-            self.rect.y = int(self.pos_y)
-            for wall in walls:
-                if self.rect.colliderect(wall):
-                    collided = True
-                    if dy > 0:
-                        self.rect.bottom = wall.top
-                        self.pos_y = self.rect.y
-                    elif dy < 0:
-                        self.rect.top = wall.bottom
-                        self.pos_y = self.rect.y
-
-        if collided: 
-            # Assign negative reward in RL context
-            self.speed *= 0.75  # Lose most speed on collision
-
-    def angle_to_single_axis(self, speed, angle):
-
-        """Convert speed and angle to dx, dy components with consistent magnitude
-        Need to understand the hypotenuse normalization better / why it smooths it out"""
-
-        rad = math.radians(angle)
-        dx = speed * math.cos(rad)
-        dy = speed * math.sin(rad)
-        # Normalize to ensure consistent speed in all directions
-        # Not sure why it works but the movement is way better this way
-        length = math.hypot(dx, dy)
-        if length > 0:
-            dx = dx / length * abs(speed)
-            dy = dy / length * abs(speed)
-        return dx, dy
-
-    def draw(self, surface):
-        """Draw the mouse on the given surface with rotation"""
-        rotated = pygame.transform.rotate(self.base_surface, -(self.angle+90))
-        rotated_rect = rotated.get_rect(center=self.rect.center)
-        surface.blit(rotated, rotated_rect)
+def coords_to_instructions(path=None):
+    """Convert path coordinates to simple waypoint instructions."""
+    if path is None:
+        path = [(0,0), (0, 1), (1, 1), (2, 1), (2, 2), (3, 2), (3, 3), (4, 3), (4, 4)]
+        pathtwo = [(0, 1), (1, 1), (2, 1), (2, 2), (3, 2),
+                   (3, 3), (4, 3), (4, 4), (3, 4), (3, 5),
+                   (2, 5), (2, 6), (1, 6), (1, 7), (1, 8),
+                   (1, 9), (1, 10), (1, 11), (1, 12), (1, 13),
+                   (1, 14), (0, 14), (0, 15), (1, 15), (2, 15),
+                   (3, 15), (4, 15), (5, 15), (6, 15), (7, 15),
+                   (7, 14), (8, 14), (8, 13), (9, 13), (9, 14),
+                   (10, 14), (10, 13), (11, 13), (11, 12), (11, 11),
+                   (11, 10), (11, 9), (11, 8), (10, 8), (10, 7),
+                   (9, 7), (9, 6), (8, 6), (8, 5), (7, 5), (6, 5),
+                   (6, 6), (7, 6), (7, 7)]
+        print(pathtwo)
+    return pathtwo[1:]  # Skip starting position
 
 
-def main(mouse=None):
-    maze = maze_loader.load()
-    if not maze:
-        print("No maze file selected. Exiting.")
-        return
+def mouse_input(mouse, mode):
+    if not mode:
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            mouse.angle -= 5
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            mouse.angle += 5
+        if keys[pygame.K_UP] or keys[pygame.K_w]:
+            mouse.speed += 1.5*mouse.impulse
+        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            mouse.speed -= mouse.impulse
     else:
-        walls_dict, max_y = maze
+        move = mouse.update()
+        if move == "a":
+            mouse.angle -= 5
+        elif move == "d":
+            mouse.angle += 5
+        elif move == "w":
+            mouse.speed += 1.5*mouse.impulse
+        elif move == "s":
+            mouse.speed -= mouse.impulse
+
+
+
+def main(mouse):
 
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Maze Environment")
     clock = pygame.time.Clock()    
-    walls = build_walls(walls_dict, max_y)
-
-    if not mouse:
-        mouse = Mouse(0.375, max_y+0.375)  # Mouse starts near bottom-left corner
 
     running = True
     while running:
@@ -140,33 +98,17 @@ def main(mouse=None):
             if event.type == pygame.QUIT:
                 running = False
 
-        player_control = True  # Set to False for autonomous control
-        if player_control:
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-                mouse.angle -= 5
-            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-                mouse.angle += 5
-            if keys[pygame.K_UP] or keys[pygame.K_w]:
-                mouse.speed += 1.5*mouse.impulse
-            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-                mouse.speed -= mouse.impulse
-            mouse.angle %= 360
-        
-        if not player_control:
-            # automated_mouse.mouse.step_through_path(position)
-            pass
+        mouse_input(mouse, mouse.auto_mode)
 
-
-        # Assign postive reward for higher speed in RL context
-
+        # Assign postive reward for higher speed in RL context 
+        mouse.angle %= 360
         mouse.speed *= 0.9  # Simulate friction
         if abs(mouse.speed) < 0.05:
-            mouse.speed = 0
-        mouse.move(mouse.speed, mouse.angle, walls)
+            mouse.speed = 0   
+        mouse.move(mouse.speed, mouse.angle)
 
         screen.fill(BLACK)
-        for wall in walls:
+        for wall in mouse.walls:
             pygame.draw.rect(screen, WHITE, wall)
         mouse.draw(screen)
         pygame.display.flip()
@@ -174,5 +116,27 @@ def main(mouse=None):
 
     pygame.quit()
 
+
 if __name__ == "__main__":
-    main()
+
+    maze = maze_loader.load()
+    if not maze:
+        print("No maze file selected. Exiting.")
+        sys.exit()
+    else:
+        walls_dict, max_y = maze
+    walls = build_walls(walls_dict, max_y)
+    intructions = coords_to_instructions()
+
+    # mouse = Mouse(0.375, max_y, walls) # Player controlled
+    mouse = AutoMouse(0.375, max_y+0.375, max_y=max_y, walls=walls, waypoints=intructions) # AutoMouse controlled
+
+    main(mouse)
+
+
+    # goal_pos = maze.width // 2 - 1, maze.height // 2 - 1
+    # maze.set_goal_pos(goal_pos)
+
+
+    # example path for maze 4
+    # [(0, 1), (1, 1), (2, 1), (2, 2), (3, 2), (3, 3), (4, 3), (4, 4), (3, 4), (3, 5), (2, 5), (2, 6), (1, 6), (1, 7), (1, 8), (1, 9), (1, 10), (1, 11), (1, 12), (1, 13), (1, 14), (0, 14), (0, 15), (1, 15), (2, 15), (3, 15), (4, 15), (5, 15), (6, 15), (7, 15), (7, 14), (8, 14), (8, 13), (9, 13), (9, 14), (10, 14), (10, 13), (11, 13), (11, 12), (11, 11), (11, 10), (11, 9), (11, 8), (10, 8), (10, 7), (9, 7), (9, 6), (8, 6), (8, 5), (7, 5), (6, 5), (6, 6), (7, 6), (7, 7)]

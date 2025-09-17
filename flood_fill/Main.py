@@ -90,6 +90,7 @@ class Maze:
             log("Added wall at: ({}, {})".format(x, y, direction))
     
     def calculate_path(self, mouse_pos, heading):
+        log("Path: {}".format(self.path))
         self.path = []
         API.clearAllColor()
         x, y = mouse_pos
@@ -316,6 +317,7 @@ def main():
     maze.calculate_path(mouse.get_position(), mouse.get_heading())
     maze.completed = False
     counter = 0
+
     while True:
         heading = mouse.get_heading()
         position = mouse.get_position()
@@ -326,6 +328,7 @@ def main():
         log("goal_pos: {}".format(goal_pos))
         log("Completed: {}".format(maze.completed))
         blocked = mouse.check_blocked(position, path)
+
         if blocked:
             log("Recalculating Path...")
             maze.calculate_path(position, heading)
@@ -350,6 +353,6 @@ def main():
                 goal_pos = maze.get_goal_pos()
                 maze.calculate_path(position, heading)
 
-
+        
 if __name__ == "__main__":
     main()
