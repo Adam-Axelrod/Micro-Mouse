@@ -43,10 +43,9 @@ def build_walls(walls, max_y):
 
 
 def coords_to_instructions(path=None):
-    """Convert path coordinates to simple waypoint instructions."""
+    """Convert path coordinates to simple waypoint instructions. ignore this lol"""
     if path is None:
-        path = [(0,0), (0, 1), (1, 1), (2, 1), (2, 2), (3, 2), (3, 3), (4, 3), (4, 4)]
-        pathtwo = [(0, 1), (1, 1), (2, 1), (2, 2), (3, 2),
+        path = [(0, 1), (1, 1), (2, 1), (2, 2), (3, 2),
                    (3, 3), (4, 3), (4, 4), (3, 4), (3, 5),
                    (2, 5), (2, 6), (1, 6), (1, 7), (1, 8),
                    (1, 9), (1, 10), (1, 11), (1, 12), (1, 13),
@@ -57,8 +56,7 @@ def coords_to_instructions(path=None):
                    (11, 10), (11, 9), (11, 8), (10, 8), (10, 7),
                    (9, 7), (9, 6), (8, 6), (8, 5), (7, 5), (6, 5),
                    (6, 6), (7, 6), (7, 7)]
-        print(pathtwo)
-    return pathtwo[1:]  # Skip starting position
+    return path[1:]  # Skip starting position
 
 
 def mouse_input(mouse, mode):

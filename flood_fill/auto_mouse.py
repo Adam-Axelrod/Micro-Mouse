@@ -9,11 +9,17 @@ class AutoMouse(Mouse):
         super().__init__(x, y, walls)
         self.auto_mode = True
         self.waypoints = waypoints if waypoints else []
+        self.returnpoints = self.waypoints[::-1]
         self.current_waypoint = 0
         self.max_y = max_y
+
         print(self.waypoints)
+        print(self.returnpoints)
 
     def update(self):
+        if not self.waypoints:  # Ensure there are waypoints to follow
+            return None
+
         if self.current_waypoint < len(self.waypoints):
             target_maze_x, target_maze_y = self.waypoints[self.current_waypoint]
 
@@ -28,7 +34,7 @@ class AutoMouse(Mouse):
             distance = (dx**2 + dy**2)**0.5
 
             # If close enough, move to next waypoint
-            if distance < TILE_SIZE // 3:
+            if distance < TILE_SIZE // 1.5: # higher denominator means mouse needs to get close to the centre of the tile
                 self.current_waypoint += 1
                 return None
 
@@ -48,6 +54,10 @@ class AutoMouse(Mouse):
             else:
                 return "a"  # Turn left
 
-        # No waypoints left, hand control back
-        self.auto_mode = False
-        return None
+        else:
+            self.current_waypoint = 0
+            self.waypoints = self.returnpoints #loop
+            target_maze_x, target_maze_y = self.waypoints[self.current_waypoint]
+            self.returnpoints = self.returnpoints[::-1]
+        # self.auto_mode = False #hand control back
+        # return None
