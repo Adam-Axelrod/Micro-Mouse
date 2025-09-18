@@ -1,20 +1,16 @@
 from mouse import Mouse
-import random
 import math
 
 TILE_SIZE = 40  # Size of each maze cell in pixels
 
 class AutoMouse(Mouse):
-    def __init__(self, x, y, walls, max_y=None, waypoints=None):
-        super().__init__(x, y, walls)
+    def __init__(self, x, y, walls, colour, max_y, waypoints=None):
+        super().__init__(x, y, walls, colour)
         self.auto_mode = True
         self.waypoints = waypoints if waypoints else []
         self.returnpoints = self.waypoints[::-1]
         self.current_waypoint = 0
-        self.max_y = max_y
-
-        print(self.waypoints)
-        print(self.returnpoints)
+        self.max_y=max_y
 
     def update(self):
         if not self.waypoints:  # Ensure there are waypoints to follow

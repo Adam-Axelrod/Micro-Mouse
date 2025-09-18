@@ -1,4 +1,3 @@
-# import math
 import pygame
 import sys
 
@@ -19,6 +18,7 @@ TILE_SIZE = 40  # Adjust based on your maze size and screen resolution
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 GREEN = (0, 255, 0)
+PINK = (255, 0, 255)
 
 
 def build_walls(walls, max_y):
@@ -59,31 +59,7 @@ def coords_to_instructions(path=None):
     return path[1:]  # Skip starting position
 
 
-def mouse_input(mouse, mode):
-    if not mode:
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            mouse.angle -= 5
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            mouse.angle += 5
-        if keys[pygame.K_UP] or keys[pygame.K_w]:
-            mouse.speed += 1.5*mouse.impulse
-        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-            mouse.speed -= mouse.impulse
-    else:
-        move = mouse.update()
-        if move == "a":
-            mouse.angle -= 5
-        elif move == "d":
-            mouse.angle += 5
-        elif move == "w":
-            mouse.speed += 1.5*mouse.impulse
-        elif move == "s":
-            mouse.speed -= mouse.impulse
-
-
-
-def main(mouse):
+def main(mice):
 
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -96,19 +72,23 @@ def main(mouse):
             if event.type == pygame.QUIT:
                 running = False
 
-        mouse_input(mouse, mouse.auto_mode)
-
         # Assign postive reward for higher speed in RL context 
-        mouse.angle %= 360
-        mouse.speed *= 0.9  # Simulate friction
-        if abs(mouse.speed) < 0.05:
-            mouse.speed = 0   
-        mouse.move(mouse.speed, mouse.angle)
+        for mouse in mice:
+            mouse.mouse_input()
+            mouse.angle %= 360
+            mouse.speed *= 0.9  # Simulate friction
+            if abs(mouse.speed) < 0.05:
+                mouse.speed = 0   
+            mouse.move(mouse.speed, mouse.angle)
 
         screen.fill(BLACK)
-        for wall in mouse.walls:
+
+        for wall in mice[0].walls:
             pygame.draw.rect(screen, WHITE, wall)
-        mouse.draw(screen)
+
+        for mouse in mice:
+            mouse.draw(screen)
+            
         pygame.display.flip()
         clock.tick(60)
 
@@ -124,12 +104,30 @@ if __name__ == "__main__":
     else:
         walls_dict, max_y = maze
     walls = build_walls(walls_dict, max_y)
-    intructions = coords_to_instructions()
+    instructions = coords_to_instructions()
 
-    # mouse = Mouse(0.375, max_y, walls) # Player controlled
-    mouse = AutoMouse(0.375, max_y+0.375, max_y=max_y, walls=walls, waypoints=intructions) # AutoMouse controlled
+    mice = []
 
-    main(mouse)
+    # Player controlled
+    mouse = Mouse(
+        x=0.375,
+        y=max_y,
+        walls=walls,
+        colour=PINK
+        ) 
+
+    # Green auto mouse
+    automouse = AutoMouse(
+        x=0.375,
+        y=max_y+0.375,
+        walls=walls,
+        colour=GREEN,
+        max_y=max_y,
+        waypoints=instructions
+    )
+
+    mice = [mouse, automouse]
+    main(mice)
 
 
     # goal_pos = maze.width // 2 - 1, maze.height // 2 - 1

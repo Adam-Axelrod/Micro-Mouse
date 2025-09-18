@@ -3,30 +3,47 @@ import pygame
 
 """Constants"""
 TILE_SIZE = 40  # Adjust based on your maze size and screen resolution
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-GREEN = (0, 255, 0)
 
 """General Mouse Class"""
 class Mouse:
-    def __init__(self, x, y, walls):
+    def __init__(self, x, y, walls, colour):
+        self.auto_mode = False # Default to manual control
+        self.walls = walls # Drawn walls between cells
+        self.width = int(TILE_SIZE * 0.3) # Cell size
+        self.height = int(TILE_SIZE * 0.5) # Cell size
+        self.pos_x = x * TILE_SIZE # Grid coords
+        self.pos_y = y * TILE_SIZE # Grid coords
+        self.impulse = 0.3 # Momentum change from key press
+        self.angle = -90 # Start facing up
+        self.speed = 0 # Movement per frame
+        self.collided = False # Collision with wall check
 
-        """x, y position in maze coordinates (not pixels) + size based on TILE_SIZE"""
-
-        self.auto_mode = False
-        self.walls = walls
-        self.width = int(TILE_SIZE * 0.3)
-        self.height = int(TILE_SIZE * 0.5)
-        self.pos_x = x * TILE_SIZE
-        self.pos_y = y * TILE_SIZE
-        self.impulse = 0.3        
-        self.angle = -90
-        self.speed = 0
-        self.collided = False
-
-        self.rect = pygame.Rect(self.pos_x, self.pos_y, self.width, self.height)
+        self.colour = colour
+        self.rect = pygame.Rect(self.pos_x, self.pos_y, self.width, self.height) # Draws mouse
         self.base_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-        pygame.draw.rect(self.base_surface, GREEN, (0, 0, self.width, self.height))
+        pygame.draw.rect(self.base_surface, self.colour, (0, 0, self.width, self.height))
+
+    def mouse_input(self):
+        if not self.auto_mode: # Keyboard movement
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+                self.angle -= 5
+            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+                self.angle += 5
+            if keys[pygame.K_UP] or keys[pygame.K_w]:
+                self.speed += 1.5*self.impulse
+            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+                self.speed -= self.impulse
+        else: # Autonomous movement mimick
+            move = self.update()
+            if move == "a":
+                self.angle -= 5
+            elif move == "d":
+                self.angle += 5
+            elif move == "w":
+                self.speed += 1.5*self.impulse
+            elif move == "s":
+                self.speed -= self.impulse
 
     def move(self, speed, angle):
 
@@ -70,14 +87,13 @@ class Mouse:
 
     def angle_to_single_axis(self, speed, angle):
 
-        """Calculates what distance to move in x and y based on speed and angle
-        
-        Convert speed and angle to dx, dy components with consistent magnitude
+        """Convert speed and angle to dx, dy components with consistent magnitude
         Need to understand the hypotenuse normalization better / why it smooths it out"""
 
         rad = math.radians(angle)
         dx = speed * math.cos(rad)
         dy = speed * math.sin(rad)
+
         # Normalize to ensure consistent speed in all directions
         # Not sure why it works but the movement is way better this way
         length = math.hypot(dx, dy)
@@ -96,6 +112,3 @@ class Mouse:
         surface.blit(rotated, rotated_rect)
 
 
-"""def open_instructions():
-    pass
-    """
