@@ -1,22 +1,22 @@
 import math
 import pygame
-
-"""Constants"""
-TILE_SIZE = 40  # Adjust based on your maze size and screen resolution
+from actions import Action
 
 """General Mouse Class"""
 class Mouse:
-    def __init__(self, x, y, walls, colour):
+    def __init__(self, x, y, walls, tile_size, colour):
         self.auto_mode = False # Default to manual control
         self.walls = walls # Drawn walls between cells
-        self.width = int(TILE_SIZE * 0.3) # Cell size
-        self.height = int(TILE_SIZE * 0.5) # Cell size
-        self.pos_x = x * TILE_SIZE # Grid coords
-        self.pos_y = y * TILE_SIZE # Grid coords
+        self.tile_size = tile_size
+        self.width = int(self.tile_size * 0.3) # Cell size
+        self.height = int(self.tile_size * 0.5) # Cell size
+        self.pos_x = x * self.tile_size # Grid coords
+        self.pos_y = y * self.tile_size # Grid coords
         self.impulse = 0.3 # Momentum change from key press
         self.angle = -90 # Start facing up
         self.speed = 0 # Movement per frame
         self.collided = False # Collision with wall check
+        self.score = 0
 
         self.colour = colour
         self.rect = pygame.Rect(self.pos_x, self.pos_y, self.width, self.height) # Draws mouse
@@ -24,28 +24,35 @@ class Mouse:
         pygame.draw.rect(self.base_surface, self.colour, (0, 0, self.width, self.height))
 
     def mouse_input(self):
-        if not self.auto_mode: # Keyboard movement
+        signals = []
+        if not self.auto_mode:
+            # Manual keyboard control
             keys = pygame.key.get_pressed()
             if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-                self.angle -= 5
+                signals.append(Action.TURN_LEFT)
             if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-                self.angle += 5
+                signals.append(Action.TURN_RIGHT)
             if keys[pygame.K_UP] or keys[pygame.K_w]:
-                self.speed += 1.5*self.impulse
+                signals.append(Action.MOVE_FORWARD)
             if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-                self.speed -= self.impulse
-        else: # Autonomous movement mimick
-            move = self.update()
-            if move == "a":
-                self.angle -= 5
-            elif move == "d":
-                self.angle += 5
-            elif move == "w":
-                self.speed += 1.5*self.impulse
-            elif move == "s":
-                self.speed -= self.impulse
+                signals.append(Action.MOVE_BACKWARD)
 
-    def move(self, speed, angle):
+        else:
+            # Autonomous mouse (AI or AutoMouse)
+            signals = self.update()
+
+        for action in signals:
+            match action:
+                case Action.TURN_LEFT:
+                    self.angle -= 5
+                case Action.TURN_RIGHT:
+                    self.angle += 5
+                case Action.MOVE_FORWARD:
+                    self.speed += 1.5 * self.impulse
+                case Action.MOVE_BACKWARD:
+                    self.speed -= self.impulse
+
+    def step(self, speed, angle):
 
         """Move mouse with collision detection"""
 
@@ -53,6 +60,8 @@ class Mouse:
         self.speed = speed
         self.collided = False
         dx, dy = self.angle_to_single_axis(speed, angle)
+
+
 
         if dx != 0: # x axis movement
             self.pos_x += dx
@@ -81,8 +90,10 @@ class Mouse:
                         self.rect.top = wall.bottom
                         self.pos_y = self.rect.y
 
+
+
         if self.collided: 
-            # Assign negative reward in RL context
+            self.score = max(0, self.score - 1)
             self.speed *= 0.75  # Lose most speed on collision
 
     def angle_to_single_axis(self, speed, angle):
@@ -110,5 +121,4 @@ class Mouse:
         rotated = pygame.transform.rotate(self.base_surface, -(self.angle+90))
         rotated_rect = rotated.get_rect(center=self.rect.center)
         surface.blit(rotated, rotated_rect)
-
 

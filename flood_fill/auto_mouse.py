@@ -1,28 +1,28 @@
-from mouse import Mouse
 import math
-
-TILE_SIZE = 40  # Size of each maze cell in pixels
+from mouse import Mouse
+from actions import Action
 
 class AutoMouse(Mouse):
-    def __init__(self, x, y, walls, colour, max_y, waypoints=None):
-        super().__init__(x, y, walls, colour)
+    def __init__(self, x, y, walls, tile_size, colour, max_y, path=None):
+        super().__init__(x, y, walls, tile_size, colour)
+        self.tile_size = tile_size
         self.auto_mode = True
-        self.waypoints = waypoints if waypoints else []
-        self.returnpoints = self.waypoints[::-1]
+        self.path = path if path else []
+        self.returnpoints = self.path[::-1]
         self.current_waypoint = 0
         self.max_y=max_y
 
     def update(self):
-        if not self.waypoints:  # Ensure there are waypoints to follow
-            return None
+        if not self.path:  # Ensure there are path to follow
+            return []
 
-        if self.current_waypoint < len(self.waypoints):
-            target_maze_x, target_maze_y = self.waypoints[self.current_waypoint]
+        if self.current_waypoint < len(self.path):
+            target_maze_x, target_maze_y = self.path[self.current_waypoint]
 
             # Flip Y to match screen coordinates
             render_y = self.max_y - target_maze_y
-            target_pixel_x = target_maze_x * TILE_SIZE + TILE_SIZE // 2
-            target_pixel_y = render_y * TILE_SIZE + TILE_SIZE // 2
+            target_pixel_x = target_maze_x * self.tile_size + self.tile_size // 2
+            target_pixel_y = render_y * self.tile_size + self.tile_size // 2
 
             # Vector to target
             dx = target_pixel_x - self.rect.centerx
@@ -30,9 +30,9 @@ class AutoMouse(Mouse):
             distance = (dx**2 + dy**2)**0.5
 
             # If close enough, move to next waypoint
-            if distance < TILE_SIZE // 1.5: # higher denominator means mouse needs to get close to the centre of the tile
+            if distance < self.tile_size // 0.75: # higher denominator means mouse needs to get close to the centre of the tile
                 self.current_waypoint += 1
-                return None
+                return []
 
             # Calculate desired angle (Pygame Y-down, positive clockwise)
             desired_angle = math.degrees(math.atan2(dy, dx))
@@ -44,16 +44,18 @@ class AutoMouse(Mouse):
 
             # Decide movement
             if abs(angle_diff) < 15:
-                return "w"  # Move forward
+                return [Action.MOVE_FORWARD]
             elif angle_diff > 0:
-                return "d"  # Turn right
+                return [Action.TURN_RIGHT]
+            elif angle_diff < 0:
+                return [Action.TURN_LEFT]  # Turn left
             else:
-                return "a"  # Turn left
-
+                return []
+            
         else:
             self.current_waypoint = 0
-            self.waypoints = self.returnpoints #loop
-            target_maze_x, target_maze_y = self.waypoints[self.current_waypoint]
+            self.path = self.returnpoints #loop
+            target_maze_x, target_maze_y = self.path[self.current_waypoint]
             self.returnpoints = self.returnpoints[::-1]
         # self.auto_mode = False #hand control back
-        # return None
+        return []
