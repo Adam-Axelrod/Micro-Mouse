@@ -1,18 +1,16 @@
 import math
-from mouse import Mouse
-from actions import Action
+from mouse import Mouse, Action
 
 class AutoMouse(Mouse):
     def __init__(self, x, y, walls, tile_size, colour, max_y, path=None):
         super().__init__(x, y, walls, tile_size, colour)
         self.tile_size = tile_size
-        self.auto_mode = True
         self.path = path if path else []
         self.returnpoints = self.path[::-1]
         self.current_waypoint = 0
         self.max_y=max_y
 
-    def update(self):
+    def get_action(self):
         if not self.path:  # Ensure there are path to follow
             return []
 
@@ -30,7 +28,7 @@ class AutoMouse(Mouse):
             distance = (dx**2 + dy**2)**0.5
 
             # If close enough, move to next waypoint
-            if distance < self.tile_size // 0.75: # higher denominator means mouse needs to get close to the centre of the tile
+            if distance < self.tile_size // 1.7: # higher denominator means mouse needs to get close to the centre of the tile
                 self.current_waypoint += 1
                 return []
 
@@ -57,5 +55,4 @@ class AutoMouse(Mouse):
             self.path = self.returnpoints #loop
             target_maze_x, target_maze_y = self.path[self.current_waypoint]
             self.returnpoints = self.returnpoints[::-1]
-        # self.auto_mode = False #hand control back
         return []
