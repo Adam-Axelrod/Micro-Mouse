@@ -24,7 +24,7 @@ class Agent(Mouse):
         self.epsilon = 0 # randomness
         self.gamma = 0.95 # discount rate
         self.memory = deque(maxlen=MAX_MEMORY) # popleft()
-        self.model = Linear_QNet(14, 256, 6)
+        self.model = Linear_QNet(10, 256, 4) # Changed to 4 outputs
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
 
         self.waypoints = generate_turns(path)
@@ -37,6 +37,13 @@ class Agent(Mouse):
         super().reset() 
         self.score = 0
         self.waypoints = generate_turns(path)
+        self.collided = False
+
+        jitter = TILE_SIZE * 0.1 # e.g., 5% of a tile size
+        self.pos_x += random.uniform(-jitter, jitter)
+        self.pos_y += random.uniform(-jitter, jitter)
+        self.rect.x = int(self.pos_x)
+        self.rect.y = int(self.pos_y)
 
     def get_state(self):
         """
@@ -46,19 +53,22 @@ class Agent(Mouse):
         # adjust state to include maze, goal, position, speed, and angle
         """
 
-        wp = list(self.waypoints[:5])  # last up to 5
-        if len(wp) < 5 and len(self.waypoints) > 0:
-            wp = wp + [self.waypoints[-1]] * (5 - len(wp))
+        wp = list(self.waypoints[:3])
+        if len(wp) < 3 and len(self.waypoints) > 0:
+            wp = wp + [self.waypoints[-1]] * (3 - len(wp))
 
         flat_wp = []
         for w in wp:
             flat_wp.extend([w[0], w[1]])
 
+        agent_grid_x = self.pos_x / TILE_SIZE
+        agent_grid_y = self.max_y - (self.pos_y / TILE_SIZE)
+
         state = [
             *flat_wp,
-            self.pos_x,
-            self.pos_y,
-            self.angle,
+            agent_grid_x,
+            agent_grid_y,
+            (self.angle % 360) / 180 - 1,
             self.speed
             ]
 
@@ -81,38 +91,39 @@ class Agent(Mouse):
 
     def get_action(self, state):
         """model outputs a binary array 
-        [forward, right, left, backward, forwardright, forwardleft]
+        [forward, backward, left, right]
         """
         movement_signals = []
 
         # self.epsilon = 80 - self.n_games
-        self.epsilon = max(5, 80 * np.exp(-0.01 * self.n_games))
-        final_move = [0,0,0,0,0,0]
+        self.epsilon = max(10, 160 * np.exp(-0.03 * self.n_games))
+        final_move = [0,0,0,0]
         if random.randint(0, 200) < self.epsilon:
-            move = random.randint(0, 5)
-            final_move[move] = 1
+            # Randomly choose a movement and a turn
+            move_choice = random.randint(0, 1)
+            turn_choice = random.randint(2, 3)
+            final_move[move_choice] = 1
+            if random.random() < 0.3: # 50% chance to also turn
+                final_move[turn_choice] = 1
         else:
             state0 = torch.tensor(state, dtype=torch.float)
             prediction = self.model(state0)
-            move = torch.argmax(prediction).item()
-            final_move[move] = 1        
+            # Decide forward/backward based on the first two outputs
+            if prediction[0] > prediction[1]:
+                final_move[0] = 1 # Forward
+            else:
+                final_move[1] = 1 # Backward
 
-        model_input = np.array(final_move)
+            # Decide left/right turn based on the last two outputs
+            if prediction[2] > prediction[3]:
+                final_move[2] = 1 # Turn Left
+            else:
+                final_move[3] = 1 # Turn Right
 
-        if model_input[0] == 1:
-            movement_signals.append(Action.MOVE_FORWARD)
-        if model_input[1] == 1:
-            movement_signals.append(Action.TURN_RIGHT)
-        if model_input[2] == 1:
-            movement_signals.append(Action.TURN_LEFT)
-        if model_input[3] == 1:
-            movement_signals.append(Action.MOVE_BACKWARD)
-        if model_input[4] == 1:
-            movement_signals.append(Action.MOVE_FORWARD)
-            movement_signals.append(Action.TURN_RIGHT)
-        if model_input[5] == 1:
-            movement_signals.append(Action.MOVE_FORWARD)
-            movement_signals.append(Action.TURN_LEFT)
+        if final_move[0]: movement_signals.append(Action.MOVE_FORWARD)
+        if final_move[1]: movement_signals.append(Action.MOVE_BACKWARD)
+        if final_move[2]: movement_signals.append(Action.TURN_LEFT)
+        if final_move[3]: movement_signals.append(Action.TURN_RIGHT)
 
         return movement_signals, final_move
     
@@ -127,9 +138,9 @@ class Agent(Mouse):
             if self.rect.colliderect(waypoint_rect):
                 self.waypoints.pop(0) # Remove the waypoint hit
 
-MAX_MEMORY = 50_000
-BATCH_SIZE = 256
-LR = 0.002
+MAX_MEMORY = 100_000
+BATCH_SIZE = 512
+LR = 0.01
 
 def train():
     maze_params = load_maze("/Users/victorciobanu/Documents/Programming/Micro-Mouse/mazes/example4.num")
@@ -144,6 +155,7 @@ def train():
     total_score = 0
     record = 0
     frame = 0
+    frame_budget = 250
 
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -167,23 +179,48 @@ def train():
 
         ## reward calcs
         done = False
-        reward = -0.1
-        if environment.maze.reward_gates and agent.rect.colliderect(environment.maze.reward_gates[0]):
-            reward += 50
-            environment.maze.reward_gates.pop(0)
-        if agent.collided:
+        reward = 0
+
+        # Reward shaping: reward agent for getting closer to the next waypoint
+        if agent.waypoints:
+            waypoint_x, waypoint_y = agent.waypoints[0]
+            # Convert waypoint to pixel coordinates
+            target_x = waypoint_x * TILE_SIZE + TILE_SIZE / 2
+            target_y = (max_y - waypoint_y) * TILE_SIZE + TILE_SIZE / 2
+            
+            dist_old = np.hypot(state_old[6]*TILE_SIZE - target_x, (max_y - state_old[7])*TILE_SIZE - target_y)
+            dist_new = np.hypot(agent.pos_x - target_x, agent.pos_y - target_y)
+
+            reward += (dist_old - dist_new) * 0.01 # Small reward for getting closer
+
+        if environment.maze.reward_gates: # reward for being on the right path
+            first_gate = environment.maze.reward_gates[0]
+            if agent.rect.colliderect(first_gate):
+                reward += 10 # Reduced reward for hitting a gate
+                frame_budget += 250
+                environment.maze.reward_gates.pop(0)
+
+        if agent.collided: # wall collision penalty
             reward -= 1
             done = True
-        if (agent.pos_x, agent.pos_y) == agent.goal:
-            reward += 5000
+
+        if (agent.pos_x, agent.pos_y) == agent.goal: # big reward for winning
+            reward += 2000
             done = True
-        if frame > 50000 // len(environment.maze.reward_gates):
-            print(frame)
-            print(100000 // len(environment.maze.reward_gates))
+
+        if agent.speed < 0.02:
+            reward -= 1
+
+        if frame > frame_budget: # time cutoff (per-gate budget)
             done = True
+
+        # clamp non-terminal rewards to reduce variance
+        if not done or ((agent.pos_x, agent.pos_y) != agent.goal):
+            reward = float(np.clip(reward, -50, 50))
+
+
         agent.score += reward
         score = agent.score
-
 
         state_new = agent.get_state()
 
@@ -192,7 +229,12 @@ def train():
         agent.remember(state_old, action_array, reward, state_new, done) # remember
 
         if done: # train long memory, plot result
+
+            # debug
+            print(frame)
+
             frame = 0
+            frame_budget = 250
             agent.reset()
             environment.maze.build_rewards(path, max_y) # Reset reward gates
             agent.n_games += 1
@@ -202,7 +244,7 @@ def train():
                 record = score
                 agent.model.save()
 
-            print('Game', agent.n_games, 'Score', score, 'Record:', record)
+            print('Game', agent.n_games, 'Score', score, 'Record:', record)            
 
             plot_scores.append(score)
             total_score += score

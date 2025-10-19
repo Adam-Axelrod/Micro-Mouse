@@ -33,7 +33,7 @@ class Maze:
         self.reward_gates = []
         for (x, y) in path:
             render_y = max_y - y
-            reward_size = TILE_SIZE // 1.2
+            reward_size = TILE_SIZE / 1.05
             reward_x = x * TILE_SIZE + (TILE_SIZE - reward_size) // 2
             reward_y = render_y * TILE_SIZE + (TILE_SIZE - reward_size) // 2
             self.reward_gates.append(pygame.Rect(reward_x, reward_y, reward_size, reward_size))
