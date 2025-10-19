@@ -1,7 +1,6 @@
 import pygame
 
 from maze import Maze
-from mouse import Action
 from constants import *
 
 class Environment:
@@ -22,6 +21,10 @@ class Environment:
 
         for wall in self.maze.walls:
             pygame.draw.rect(screen, WHITE, wall)
+
+        if hasattr(self.maze, "reward_gates"):
+            for reward_gate in self.maze.reward_gates:
+                pygame.draw.rect(screen, ORANGE, reward_gate)
 
         for mouse in self.mice:
             rotated = pygame.transform.rotate(mouse.base_surface, -(mouse.angle+90))
@@ -53,14 +56,5 @@ class Environment:
         dt = clock.tick(60) / 1000.0
 
         for mouse in self.mice:
-
-            
-            signals = mouse.get_action()
-            for action in signals:
-                if action == Action.TURN_LEFT: mouse.angle -= mouse.turnspeed
-                if action == Action.TURN_RIGHT: mouse.angle += mouse.turnspeed
-                if action == Action.MOVE_FORWARD: mouse.speed += mouse.impulse
-                if action == Action.MOVE_BACKWARD: mouse.speed -= 0.85 * mouse.impulse
-
-            mouse.update(dt, self.maze.walls)
-
+            move = mouse.get_action()
+            mouse.update(dt, self.maze.walls, move)

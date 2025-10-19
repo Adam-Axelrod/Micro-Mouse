@@ -9,6 +9,7 @@ class Action(Enum):
     MOVE_FORWARD = auto()
     MOVE_BACKWARD = auto()
 
+
 """General Mouse Class"""
 class Mouse:
 
@@ -18,6 +19,8 @@ class Mouse:
     def __init__(self, x, y, colour):
         self.width = int(TILE_SIZE * 0.3) # Cell size
         self.height = int(TILE_SIZE * 0.5) # Cell size
+        self.start_pos_x = x * TILE_SIZE
+        self.start_pos_y = y * TILE_SIZE
         self.pos_x = x * TILE_SIZE # Grid coords
         self.pos_y = y * TILE_SIZE # Grid coords
 
@@ -33,8 +36,10 @@ class Mouse:
         pygame.draw.rect(self.base_surface, self.colour, (0, 0, self.width, self.height))
 
     def reset(self):
-        self.pos_x = self.rect.x 
-        self.pos_y = self.rect.y
+        self.pos_x = self.start_pos_x
+        self.pos_y = self.start_pos_y
+        self.rect.x = int(self.pos_x)
+        self.rect.y = int(self.pos_y)
         self.angle = -90 # Start facing up
         self.speed = 0 # Movement per frame
         self.collided = False # Collision with wall check
@@ -51,11 +56,17 @@ class Mouse:
             signals.append(Action.MOVE_FORWARD)
         if keys[pygame.K_DOWN] or keys[pygame.K_s]:
             signals.append(Action.MOVE_BACKWARD)
-
+        
         return signals
 
-    def update(self, dt, walls):
+    def update(self, dt, walls, signals):
         """Advance physics and resolve collisions using the provided walls list."""
+        for action in signals:
+            if action == Action.TURN_LEFT: self.angle -= self.turnspeed
+            if action == Action.TURN_RIGHT: self.angle += self.turnspeed
+            if action == Action.MOVE_FORWARD: self.speed += self.impulse
+            if action == Action.MOVE_BACKWARD: self.speed -= 0.85 * self.impulse
+
         self.angle %= 360 #normalise
         self.speed *= 0.96 ** (dt * 100) #friction
         if abs(self.speed) < 0.05:
@@ -89,7 +100,7 @@ class Mouse:
                     self.pos_x = self.rect.x
                     break
 
-        if dy != 0: #x axis movement / collision
+        if dy != 0: #y axis movement / collision
             self.pos_y += dy
             self.rect.y = int(self.pos_y)
 
@@ -105,3 +116,5 @@ class Mouse:
 
         if self.collided:
             self.speed *= 0.75  # Lose most speed on collision
+
+        return None

@@ -2,6 +2,7 @@ import sys
 
 import maze_loader
 from mouse import Mouse
+from maze import Maze
 from environment import Environment
 from constants import *
 
