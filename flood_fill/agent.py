@@ -4,6 +4,8 @@ from collections import deque
 import numpy as np
 import pygame
 import torch
+import psutil, os
+
 
 from constants import *
 from path_calcs import *
@@ -15,6 +17,15 @@ from model import Linear_QNet, QTrainer
 from helper import plot
 
 
+def log_memory(): # trying to debug freezes down the line
+    process = psutil.Process(os.getpid())
+    mem = process.memory_info().rss / (1024 ** 2)  # MB
+    print(f"[MEM] Resident memory: {mem:.2f} MB")
+
+MAX_MEMORY = 100_000
+BATCH_SIZE = 1024  # Very large batch for diverse experiences
+LR = 0.001  # Higher learning rate to learn faster from good experiences
+
 class Agent(Mouse):
     def __init__(self, x, y, colour, max_y):
         super().__init__(x, y, colour)
@@ -22,9 +33,9 @@ class Agent(Mouse):
         self.score = 0
         self.n_games = 0
         self.epsilon = 0 # randomness
-        self.gamma = 0.95 # discount rate
+        self.gamma = 0.95 # discount rate - higher for better long-term planning
         self.memory = deque(maxlen=MAX_MEMORY) # popleft()
-        self.model = Linear_QNet(18, 512, 4) # 18 inputs: 8 rays + 6 waypoints + 4 agent state
+        self.model = Linear_QNet(16, 512, 4) # 18 inputs: 8 rays + 6 waypoints + 2 agent state
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
 
         self.waypoints = generate_turns(path)
@@ -58,7 +69,7 @@ class Agent(Mouse):
         # Convert angle to radians and get direction vector
         angle_rad = np.radians(angle_degrees)
         dx = np.cos(angle_rad)
-        dy = -np.sin(angle_rad)  # Negative because pygame y increases downward
+        dy = np.sin(angle_rad)  # Pygame y increases downward, so no negative needed
 
         # Ray origin (agent center)
         ray_x = self.pos_x + self.rect.width / 2
@@ -109,19 +120,22 @@ class Agent(Mouse):
         if len(wp) < 3 and len(self.waypoints) > 0:
             wp = wp + [self.waypoints[-1]] * (3 - len(wp))
 
-        flat_wp = []
-        for w in wp:
-            flat_wp.extend([w[0], w[1]])
-
-        # Agent state
+        # Convert waypoints to relative positions from agent
         agent_grid_x = self.pos_x / TILE_SIZE
         agent_grid_y = self.max_y - (self.pos_y / TILE_SIZE)
+
+        flat_wp = []
+        for w in wp:
+            # Relative position: waypoint - agent position
+            relative_x = w[0] - agent_grid_x
+            relative_y = w[1] - agent_grid_y
+            flat_wp.extend([relative_x, relative_y])
 
         state = [
             *ray_distances,      # 8 values: distances to walls in 8 directions
             *flat_wp,            # 6 values: next 3 waypoints
-            agent_grid_x,        # 1 value: x position
-            agent_grid_y,        # 1 value: y position
+            # agent_grid_x,        # 1 value: x position
+            # agent_grid_y,        # 1 value: y position
             (self.angle % 360) / 180 - 1,  # 1 value: normalized angle
             self.speed           # 1 value: speed
             ]
@@ -132,10 +146,24 @@ class Agent(Mouse):
         self.memory.append((state, action, reward, next_state, done)) # popleft if MAX_MEMORY is reached
 
     def train_long_memory(self):
-        if len(self.memory) > BATCH_SIZE:
-            mini_sample = random.sample(self.memory, BATCH_SIZE) # list of tuples
-        else:
-            mini_sample = self.memory
+        # Only train if we have enough diverse experiences
+        if len(self.memory) < BATCH_SIZE:
+            return
+
+        # Prioritized + recency-weighted sampling
+        memories = list(self.memory)
+        rewards = [abs(m[2]) for m in memories]  # reward magnitude
+        indices = np.arange(len(memories))
+
+        # Combine priority (reward²) and recency bias (later entries weighted higher)
+        priorities = np.array([(r + 1.0) ** 2 for r in rewards])
+        recency = np.linspace(0.5, 1.0, len(memories))  # 0.5x weight for oldest, full for newest
+        combined = priorities * recency
+        probabilities = combined / combined.sum()
+
+        # Sample with replacement using combined probabilities
+        sampled_idx = np.random.choice(indices, size=BATCH_SIZE, p=probabilities, replace=True)
+        mini_sample = [memories[i] for i in sampled_idx]
 
         states, actions, rewards, next_states, dones = zip(*mini_sample)
         self.trainer.train_step(states, actions, rewards, next_states, dones)
@@ -149,25 +177,33 @@ class Agent(Mouse):
         """
         movement_signals = []
 
-        # Slower epsilon decay to maintain exploration longer
-        self.epsilon = max(5, 200 * np.exp(-0.015 * self.n_games))
+        # VERY aggressive epsilon - maintain 50% exploration indefinitely
+        # Decays slowly from 100% to 50% over 500 games
+        self.epsilon = max(30, 100 - (self.n_games * 0.1))
         final_move = [0,0,0,0]
         
-        if random.randint(0, 200) < self.epsilon:
-            # Random exploration - choose either movement OR turning, not both
-            action_type = random.choice(['move', 'turn'])
+        if random.randint(0, 1000) < self.epsilon:
+            # AGGRESSIVE exploration - heavily favor turning to discover alternate paths
+            action_type = random.choices(['move', 'turn'], weights=[0.3, 0.7])[0]
             if action_type == 'move':
-                move_choice = random.randint(0, 1)
+                # Strongly prefer forward over backward
+                move_choice = random.choices([0, 1], weights=[0.95, 0.05])[0]
                 final_move[move_choice] = 1
             else:
+                # Equal chance of left or right turn
                 turn_choice = random.randint(2, 3)
                 final_move[turn_choice] = 1
         else:
             state0 = torch.tensor(state, dtype=torch.float)
             prediction = self.model(state0)
-            
-            # Choose the single best action instead of forcing multiple actions
-            best_action = torch.argmax(prediction).item()
+
+            # Add noise to Q-values for continued exploration during exploitation
+            # This prevents getting stuck in deterministic policies
+            noise = torch.randn_like(prediction) * 0.15  # noise
+            noisy_prediction = prediction + noise
+
+            # Choose the best action from noisy predictions
+            best_action = torch.argmax(noisy_prediction).item()
             final_move[best_action] = 1
 
         if final_move[0]: movement_signals.append(Action.MOVE_FORWARD)
@@ -188,10 +224,6 @@ class Agent(Mouse):
             if self.rect.colliderect(waypoint_rect):
                 self.waypoints.pop(0) # Remove the waypoint hit
 
-MAX_MEMORY = 100_000
-BATCH_SIZE = 256  # Smaller batch size for more frequent updates
-LR = 0.001  # Lower learning rate for stability
-
 def train():
     maze_params = load_maze("/Users/victorciobanu/Documents/Programming/Micro-Mouse/mazes/example4.num")
     walls_dict, max_y = maze_params
@@ -205,7 +237,12 @@ def train():
     total_score = 0
     record = 0
     frame = 0
-    frame_budget = 250
+    frame_budget = 200  # Generous time to explore maze
+
+    gates_hit = 0  # Track cumulative gates hit in current episode
+    dist_influence = 0
+    frame_decay = 0
+    speed_influence = 0
 
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -231,65 +268,87 @@ def train():
         done = False
         reward = 0
 
-        # Reward shaping: reward agent for getting closer to the next waypoint
-        if agent.waypoints:
-            waypoint_x, waypoint_y = agent.waypoints[0]
-            # Convert waypoint to pixel coordinates
-            target_x = waypoint_x * TILE_SIZE + TILE_SIZE / 2
-            target_y = (max_y - waypoint_y) * TILE_SIZE + TILE_SIZE / 2
+        if environment.maze.reward_gates: # reward shaping (dist to gate)
+            # Get the center of the next reward gate
+            first_gate = environment.maze.reward_gates[0]
+            target_x = first_gate.centerx
+            target_y = first_gate.centery
 
-            # State indices: [8 rays, 6 waypoints, x, y, angle, speed] = indices 14, 15 for x, y
-            dist_old = np.hypot(state_old[14]*TILE_SIZE - target_x, (max_y - state_old[15])*TILE_SIZE - target_y)
-            dist_new = np.hypot(agent.pos_x - target_x, agent.pos_y - target_y)
-            reward += (dist_old - dist_new) * 0.005 # Much smaller coefficient
+            # Calculate distance from agent center to gate center
+            agent_center_x = agent.pos_x + agent.rect.width / 2
+            agent_center_y = agent.pos_y + agent.rect.height / 2
+
+            distance_to_gate = np.hypot(agent_center_x - target_x, agent_center_y - target_y)
+            distance_in_tiles = distance_to_gate / TILE_SIZE
+
+            # Exponential distance penalty - only applies if > 2.5 tiles away
+            if distance_in_tiles > 2:
+                # Exponential penalty: -k * (e^((d-2.5)/scale) - 1)
+                # Gets much worse as agent strays further from optimal path
+                distance_penalty = -0.25 * (np.exp((distance_in_tiles - 2) / 5.0) - 1)
+                dist_influence += distance_penalty # debug
+                reward += distance_penalty
+
 
         if environment.maze.reward_gates: # reward for being on the right path
             first_gate = environment.maze.reward_gates[0]
             if agent.rect.colliderect(first_gate):
-                reward += 50 # Larger reward for hitting a gate
-                frame_budget += 250
+                gates_hit += 1
+                reward += 20 # Base gate reward (increased to make gates more valuable)
+                reward += gates_hit * 1.0  # Bonus for progression
+                frame_budget += 30
                 environment.maze.reward_gates.pop(0)
 
+        if Action.MOVE_FORWARD in movement_signals and agent.speed > 0.02: #reward for moving
+            reward += 0.02
+            speed_influence += 0.02 #debug
+
         if agent.collided: # wall collision penalty
-            reward -= 1
+            reward -= 1 # commented out since model doesnt reach goal anyway
             done = True
+            pass
 
         if (agent.pos_x, agent.pos_y) == agent.goal: # big reward for winning
-            reward += 2000
+            reward += 50
             done = True
 
-        # Encourage forward movement, discourage excessive turning
-        if agent.speed < 0.01:  # Only penalize if truly stationary
-            reward -= 0.5
-        
-        # Add small reward for forward movement to discourage spinning
-        if Action.MOVE_FORWARD in movement_signals:
-            reward += 0.025
+        reward -= 0.001 # time penalty
+        frame_decay += 0.001 # debug
 
         if frame > frame_budget: # time cutoff (per-gate budget)
+            reward -= 0.5  # Small penalty for timeout
             done = True
 
-        # clamp non-terminal rewards to reduce variance
-        if not done or ((agent.pos_x, agent.pos_y) != agent.goal):
-            reward = float(np.clip(reward, -50, 50))
-
+        # # Clamp rewards to reasonable range for stable learning
+        # reward = float(np.clip(reward, -5, 25))
 
         agent.score += reward
         score = agent.score
 
         state_new = agent.get_state(environment.maze.walls)
 
-        agent.train_short_memory(state_old, action_array, reward, state_new, done) # train short memory
+        # Only train every 4 steps to reduce instability
+        # if frame % 4 == 0:
+        agent.train_short_memory(state_old, action_array, reward, state_new, done)
 
         agent.remember(state_old, action_array, reward, state_new, done) # remember
 
         if done: # train long memory, plot result
-
+            log_memory()
             # debug
+            print(f"Game {agent.n_games}, epsilon: {agent.epsilon:.2f}")
             print(frame)
+            print(f"Dist influence: {dist_influence}")
+            print(f"Frame decay: {frame_decay}")
+            print(f"Speed influence: {speed_influence}")
+
+            frame_decay = 0 # reset debug vars
+            speed_influence = 0
+            dist_influence=0
 
             frame = 0
-            frame_budget = 250
+            frame_budget = 200  # Reset to initial generous budget
+            gates_hit = 0
             agent.reset()
             environment.maze.build_rewards(path, max_y) # Reset reward gates
             agent.n_games += 1
