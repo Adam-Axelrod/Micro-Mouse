@@ -22,9 +22,9 @@ def log_memory(): # trying to debug freezes down the line
     mem = process.memory_info().rss / (1024 ** 2)  # MB
     print(f"[MEM] Resident memory: {mem:.2f} MB")
 
-MAX_MEMORY = 100_000
-BATCH_SIZE = 1024  # Very large batch for diverse experiences
-LR = 0.001  # Higher learning rate to learn faster from good experiences
+MAX_MEMORY = 50_000
+BATCH_SIZE = 256  # Smaller batch for more frequent updates
+LR = 0.0005  # Lower learning rate for stability
 
 class Agent(Mouse):
     def __init__(self, x, y, colour, max_y):
@@ -133,11 +133,11 @@ class Agent(Mouse):
 
         state = [
             *ray_distances,      # 8 values: distances to walls in 8 directions
-            *flat_wp,            # 6 values: next 3 waypoints
+            *[x / self.max_y for x in flat_wp], # 6 values: next 3 waypoints (normalized)
             # agent_grid_x,        # 1 value: x position
             # agent_grid_y,        # 1 value: y position
             (self.angle % 360) / 180 - 1,  # 1 value: normalized angle
-            self.speed           # 1 value: speed
+            self.speed / 100.0   # 1 value: speed (normalized, assuming max ~100)
             ]
 
         return np.array(state, dtype=float)
@@ -179,12 +179,12 @@ class Agent(Mouse):
 
         # VERY aggressive epsilon - maintain 50% exploration indefinitely
         # Decays slowly from 100% to 50% over 500 games
-        self.epsilon = max(30, 100 - (self.n_games * 0.1))
+        self.epsilon = max(15, 100 - (self.n_games * 0.125))
         final_move = [0,0,0,0]
         
-        if random.randint(0, 1000) < self.epsilon:
+        if random.randint(0, 100) < self.epsilon:
             # AGGRESSIVE exploration - heavily favor turning to discover alternate paths
-            action_type = random.choices(['move', 'turn'], weights=[0.3, 0.7])[0]
+            action_type = random.choices(['move', 'turn'], weights=[0.8, 0.2])[0]
             if action_type == 'move':
                 # Strongly prefer forward over backward
                 move_choice = random.choices([0, 1], weights=[0.95, 0.05])[0]
@@ -303,10 +303,10 @@ def train():
             reward += 0.02
             speed_influence += 0.02 #debug
 
-        if agent.collided: # wall collision penalty
-            reward -= 1 # commented out since model doesnt reach goal anyway
-            done = True
-            pass
+        # if agent.collided: # wall collision penalty
+        #     reward -= 1 # commented out since model doesnt reach goal anyway
+        #     done = True
+        #     pass
 
         if (agent.pos_x, agent.pos_y) == agent.goal: # big reward for winning
             reward += 50
@@ -328,8 +328,8 @@ def train():
         state_new = agent.get_state(environment.maze.walls)
 
         # Only train every 4 steps to reduce instability
-        # if frame % 4 == 0:
-        agent.train_short_memory(state_old, action_array, reward, state_new, done)
+        if frame % 4 == 0:
+            agent.train_short_memory(state_old, action_array, reward, state_new, done)
 
         agent.remember(state_old, action_array, reward, state_new, done) # remember
 
