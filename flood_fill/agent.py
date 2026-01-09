@@ -32,6 +32,7 @@ class Agent(Mouse):
         self.max_y = max_y
         self.score = 0
         self.n_games = 0
+        
         self.epsilon = 0 # randomness
         self.gamma = 0.95 # discount rate - higher for better long-term planning
         self.memory = deque(maxlen=MAX_MEMORY) # popleft()
