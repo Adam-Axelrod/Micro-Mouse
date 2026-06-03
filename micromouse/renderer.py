@@ -59,12 +59,16 @@ class Renderer:
         self.clock.tick(config.RENDER_FPS)
 
     def _draw_mouse(self, mouse: MouseState) -> None:
-        surf = pygame.Surface((config.MOUSE_DRAW_W, config.MOUSE_DRAW_H), pygame.SRCALPHA)
-        surf.fill(config.COLOUR_MOUSE)
-        # heading 0 == +x; the surface's long axis is vertical, hence the -90.
-        rotated = pygame.transform.rotate(surf, -math.degrees(mouse.heading) - 90)
-        rect = rotated.get_rect(center=(mouse.x, mouse.y))
-        self.screen.blit(rotated, rect)
+        # Draw the mouse as its ACTUAL collision shape: a circle of MOUSE_RADIUS.
+        # This guarantees "what you see is what collides" — the old rectangle's
+        # corners reached further than the collider, which looked like clipping.
+        cx, cy = int(mouse.x), int(mouse.y)
+        radius = int(config.MOUSE_RADIUS)
+        pygame.draw.circle(self.screen, config.COLOUR_MOUSE, (cx, cy), radius)
+        # Heading indicator: a short spoke from the centre to the rim.
+        hx = cx + math.cos(mouse.heading) * config.MOUSE_RADIUS
+        hy = cy + math.sin(mouse.heading) * config.MOUSE_RADIUS
+        pygame.draw.line(self.screen, config.COLOUR_BG, (cx, cy), (int(hx), int(hy)), 2)
 
     def close(self) -> None:
         pygame.quit()

@@ -60,6 +60,8 @@ class MazeMouseEnv:
 
         self.steps = 0
         self._prev_progress = 0.0
+        self._wp_idx = 0          # index of the waypoint currently being targeted
+        self._wp_advanced = 0     # how many waypoints were reached in the last step
 
         # Spaces: 2 continuous actions; obs = rays + [sin dθ, cos dθ, dist, speed].
         self.action_space = Space((2,), -1.0, 1.0)
@@ -75,12 +77,18 @@ class MazeMouseEnv:
             jitter=config.START_JITTER,
         )
         self.steps = 0
+        # Aim at the first waypoint after the start (index 0 is the start cell).
+        self._wp_idx = min(1, len(self.maze.waypoints) - 1)
+        self._wp_advanced = 0
         self._prev_progress = self._progress()
         return self._get_obs()
 
     def step(self, action):
         self.mouse.step(action, config.FIXED_DT, self.maze.segments)   # no clock
         self.steps += 1
+        wp_before = self._wp_idx
+        self._advance_waypoint()
+        self._wp_advanced = self._wp_idx - wp_before
         reward, done = self._compute_reward()
         info = {"collided": self.mouse.collided, "steps": self.steps}
         return self._get_obs(), reward, done, info
@@ -101,26 +109,52 @@ class MazeMouseEnv:
     # ----- reward (PROVISIONAL: finalise with the policy) --------------------
     def _compute_reward(self):
         progress = self._progress()
-        reward = progress - self._prev_progress     # forward progress along path
-        reward -= 0.01                              # small time penalty
+        reward = (progress - self._prev_progress) * config.REWARD_PROGRESS  # path progress
+        reward += config.REWARD_WAYPOINT * self._wp_advanced                # waypoint milestones
+        reward += config.REWARD_HEADING * self._heading_alignment()         # move toward target
+        reward -= config.REWARD_TIME                                        # time penalty
         if self.mouse.collided:
-            reward -= 0.1                           # discourage hugging walls
+            reward -= config.REWARD_COLLISION                              # discourage walls
         self._prev_progress = progress
 
         done = False
         if self.maze.is_goal((self.mouse.x, self.mouse.y)):
-            reward += 10.0
+            reward += config.REWARD_GOAL
             done = True
         elif self.steps >= config.MAX_EPISODE_STEPS:
             done = True
         return reward, done
 
     # ----- helpers -----------------------------------------------------------
+    def _advance_waypoint(self) -> None:
+        """Step the target index forward as the mouse reaches each waypoint."""
+        wps = self.maze.waypoints
+        while self._wp_idx < len(wps) - 1:
+            tx, ty = self.maze.cell_to_world(wps[self._wp_idx])
+            if math.hypot(self.mouse.x - tx, self.mouse.y - ty) <= config.WAYPOINT_RADIUS:
+                self._wp_idx += 1
+            else:
+                break
+
     def _target_world(self) -> tuple[float, float]:
-        """A point to steer toward (provisional: the goal centre)."""
-        if self.maze.waypoints:
-            return self.maze.cell_to_world(self.maze.waypoints[-1])
-        return self.mouse.x, self.mouse.y
+        """The NEXT waypoint to steer toward (not the final goal)."""
+        wps = self.maze.waypoints
+        if not wps:
+            return self.mouse.x, self.mouse.y
+        idx = min(self._wp_idx, len(wps) - 1)
+        return self.maze.cell_to_world(wps[idx])
+
+    def _heading_alignment(self) -> float:
+        """Normalised speed projected onto the direction of the next waypoint.
+
+        +1 when driving straight at the target at full speed, negative when
+        moving away. Gives a dense per-step signal so the policy gets gradient
+        everywhere, not only when it happens to reach the sparse goal.
+        """
+        tx, ty = self._target_world()
+        dx, dy = tx - self.mouse.x, ty - self.mouse.y
+        heading_err = _wrap_angle(math.atan2(dy, dx) - self.mouse.heading)
+        return math.cos(heading_err) * (self.mouse.speed / config.MAX_SPEED)
 
     def _progress(self) -> float:
         """Fraction (0..1) of the path's arc-length the mouse has reached.
