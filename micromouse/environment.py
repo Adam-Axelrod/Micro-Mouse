@@ -11,10 +11,12 @@ The observation vector and reward are PROVISIONAL placeholders (clearly marked):
 they return sensible values so the loop works end-to-end, but their exact form
 is intended to be finalised together with the policy.
 """
+
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+
 
 import numpy as np
 
@@ -24,15 +26,12 @@ from .maze_loader import load_maze
 from .mouse import MouseState
 
 Cell = tuple[int, int]
-
-
 @dataclass
 class Space:
     """Minimal description of a vector space (avoids a gym dependency for now)."""
     shape: tuple[int, ...]
     low: float
     high: float
-
 
 def _wrap_angle(a: float) -> float:
     """Wrap an angle to (-pi, pi]."""

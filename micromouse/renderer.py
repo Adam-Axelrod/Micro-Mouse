@@ -7,7 +7,6 @@ no idea it exists.
 from __future__ import annotations
 
 import math
-
 import pygame
 
 from . import config
