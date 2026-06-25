@@ -1,74 +1,72 @@
-"""Central configuration.
-
-Every tunable constant lives here so there are no magic numbers scattered through
-the code. Import from this module rather than hard-coding values.
-"""
-from __future__ import annotations
-
 import math
 from pathlib import Path
 
 # --- Paths (resolved relative to the repo, so no absolute paths ever) --------
-PACKAGE_DIR = Path(__file__).resolve().parent          # .../Micro-Mouse/micromouse
+PACKAGE_DIR = Path(__file__).resolve().parent          # .../Micro-Mouse/micromouse_new
 REPO_DIR = PACKAGE_DIR.parent                          # .../Micro-Mouse
-MAZES_DIR = REPO_DIR / "mazes" / "example_mazes"
-DEFAULT_MAZE = MAZES_DIR / "example4.num"
+EXAMPLE_MAZES_DIR = REPO_DIR / "mazes" / "example_mazes"
+GENERATED_MAZES_DIR = REPO_DIR / "mazes" / "generated_mazes"
+DEFAULT_MAZE = EXAMPLE_MAZES_DIR / "example4.num"
 
-# --- Maze geometry -----------------------------------------------------------
-TILE_SIZE = 40.0          # pixels per maze cell
+### Compass / grid convention (single source of truth) ----------------------
+# Every module that talks about sides, steps or wall slots imports these so the
+# n/e/s/w ordering is defined exactly once. Lives here in config (the lowest
+# layer) so maze.py and explorer.py can share it without depending on each other.
 
-# --- Mouse body --------------------------------------------------------------
-MOUSE_RADIUS = TILE_SIZE * 0.18    # collision circle radius (px)
-MOUSE_DRAW_W = TILE_SIZE * 0.30    # render size only (px)
-MOUSE_DRAW_H = TILE_SIZE * 0.50
+DIRECTIONS = ("n", "e", "s", "w")                  # side order; also the (n,e,s,w) wall-tuple order
+SIDE_DELTA = {"n": (0, 1), "e": (1, 0), "s": (0, -1), "w": (-1, 0)}  # (dx, dy) step per side
+OPPOSITE = {"n": "s", "e": "w", "s": "n", "w": "e"}                  # mirror side across a shared wall
+WALL_INDEX = {side: i for i, side in enumerate(DIRECTIONS)}          # side -> slot in a wall tuple
+DELTA_SIDE = {delta: side for side, delta in SIDE_DELTA.items()}     # inverse of SIDE_DELTA
 
-# --- Physics (every rate is per-second, so behaviour is framerate-independent)
-MAX_SPEED = 120.0                      # px / s
-ACCEL = 300.0                          # px / s^2 at full throttle (action = 1)
-FRICTION = 0.5                         # speed multiplier per second with no input
-MAX_TURN_RATE = math.radians(220.0)    # rad / s at full steer (action = 1)
-ALLOW_REVERSE = False                  # if False, speed is clamped to [0, MAX_SPEED]
+### Maze attributes (all lengths in millimetres) ----------------------------
 
-# --- Simulation stepping -----------------------------------------------------
-FIXED_DT = 1.0 / 60.0      # seconds advanced per step(); DECOUPLED from real time
-MAX_EPISODE_STEPS = 2000   # episode time-out (steps)
-START_JITTER = 0.0         # random spawn offset in px (0 = deterministic)
+# START_POS = (0,0) # Bottom left corner
+MM_PER_CELL = 180          # Centre-to-centre distance between cells.
+POST_SIDE_MM = 12          # Posts that hold up the walls, same width as the walls.
+WALL_WIDTH_MM = POST_SIDE_MM  # Makes the maze a maze, same width as the posts.
+WALL_LENGTH_MM = 168       # Long side of a wall.
 
-# --- Sensors (raycasts) ------------------------------------------------------
-NUM_RAYS = 7
-RAY_FOV = math.radians(180.0)   # total fan width, centred on the heading
-RAY_MAX_DIST = 5 * TILE_SIZE    # px
+### Mouse attributes (all lengths in millimetres) ---------------------------
 
-# --- Colours / rendering (renderer only) -------------------------------------
-COLOUR_BG = (12, 12, 16)
-COLOUR_WALL = (230, 230, 230)
-COLOUR_PATH = (60, 90, 160)
-COLOUR_GOAL = (255, 165, 0)
-COLOUR_MOUSE = (235, 60, 60)
-COLOUR_RAY = (70, 160, 70)
-RENDER_FPS = 60   # human-view throttle ONLY; never gates the simulation
+WHEEL_DIAMETER_MM = 32                                  # Pololu 32x7 wheel.
+WHEEL_CIRCUMFERENCE_MM = math.pi * WHEEL_DIAMETER_MM    # ~100.53 mm; derived, never hard-coded.
+TRACK_WIDTH_MM = 70  # PROVISIONAL: wheel separation. MEASURE on chassis (story 9.2).
+# MAX_SPEED = No #m/s or turns tbd
 
-# --- Reward shaping ----------------------------------------------------------
-REWARD_PROGRESS = 10.0      # scales the fraction-of-path progress gained per step
-REWARD_HEADING = 0.01       # dense bonus for moving TOWARD the next waypoint
-REWARD_WAYPOINT = 1.0       # one-off bonus each time a waypoint is reached
-REWARD_TIME = 0.005         # flat per-step penalty (encourages finishing sooner)
-REWARD_COLLISION = 0.05     # per-step penalty while touching a wall
-REWARD_GOAL = 10.0          # one-off bonus for reaching the goal
-WAYPOINT_RADIUS = TILE_SIZE * 0.5   # how close counts as "reached" a waypoint
+### Encoder (provisional; confirm by SIM-4 / HW-1) --------------------------
+# Encoder rule: keep ONE measured count here, derive everything else from it.
+# Every distance is ticks * MM_PER_TICK, so this cannot drift out of sync.
+ENCODER_COUNTS_PER_WHEEL_REV = 500  # PROVISIONAL: full-quadrature counts per wheel rev.
+                                    # CONFIRM: push robot a measured distance, read ticks (HW-1).
+MM_PER_TICK = WHEEL_CIRCUMFERENCE_MM / ENCODER_COUNTS_PER_WHEEL_REV  # ~0.20 mm/tick; derived.
 
-# --- PPO hyperparameters -----------------------------------------------------
-HIDDEN_SIZE = 64            # width of the actor and critic MLPs
-INIT_LOG_STD = -0.5         # initial action spread (std=exp(-0.5)≈0.61); lower = calmer start
-PPO_LR = 3e-4               # Adam learning rate
-PPO_GAMMA = 0.99            # reward discount
-PPO_GAE_LAMBDA = 0.95       # GAE smoothing factor
-PPO_CLIP = 0.2             # policy-ratio clip range
-PPO_ENTROPY_COEF = 0.01     # entropy bonus (keeps exploration alive)
-PPO_VALUE_COEF = 0.5        # weight of the value-function loss
-PPO_MAX_GRAD_NORM = 0.5     # gradient clipping
-PPO_ROLLOUT_STEPS = 2048    # environment steps collected per update
-PPO_EPOCHS = 10             # optimisation passes over each rollout
-PPO_MINIBATCH = 256
-TOTAL_TIMESTEPS = 1_000_000
-CHECKPOINT_DIR = REPO_DIR / "model"
+### Render-only pixel scale (no logic code reads pixels) ---------------------
+
+PX_PER_MM = 0.5                          # Render scale only.
+TILE_PX = MM_PER_CELL * PX_PER_MM        # Pixel size of one cell when drawing.
+
+
+
+""" will integrate properly soon enough
+### Gemini platform (drive and sensing)
+
+| Quantity | Value | Class | Notes |
+|---|---|---|---|
+| Wheel diameter | 32 mm (Pololu 32x7) | FIXED | Circumference = pi x 32 = 100.53 mm. |
+| Cell in wheel revs | 180 / 100.53 = 1.79 rev | FIXED | Do not assume exactly 1 rev per cell. |
+| Top speed | ~1.0 m/s no-load | FIXED-ish | N20 ~600 rpm at 12 V x 100.5 mm. Cap lower for safety. |
+| Track width (wheel separation) | MEASURE | MEASURE | Needed for differential-drive kinematics. Measure on the chassis; put a named provisional in config. |
+| Motor | N20 micro metal gearmotor | FIXED | Brushed DC, gearbox. |
+| Encoder | magnetic Hall quadrature | FIXED | On the motor shaft. Counts per wheel rev = CPR_at_shaft x gear_ratio (full quadrature). |
+| Encoder resolution | ~0.2 mm/tick, ~900 ticks/cell | MEASURE | Order of magnitude only. Confirm exact CPR and gear ratio (SIM-4, HW-1). |
+
+**Encoder rule (design this so it cannot be wrong):** put one constant
+`ENCODER_COUNTS_PER_WHEEL_REV` in config, then derive
+`MM_PER_TICK = WHEEL_CIRCUMFERENCE_MM / ENCODER_COUNTS_PER_WHEEL_REV`. Every
+distance is `ticks * MM_PER_TICK`. The exact count is confirmed by pushing the
+real robot a measured distance and reading ticks (SIM-4 done-when, HW-1).
+
+**Pixels:** `PX_PER_MM` is a render-only scale in config. `TILE_PX = 180 *
+PX_PER_MM`. No logic reads pixels.
+"""

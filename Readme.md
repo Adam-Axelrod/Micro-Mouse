@@ -13,3 +13,4 @@ works for run.py, train.py and eval.py
 add the -h flag for help to see what flags you can run it with
 
 python -m micromouse.[python_file] -h
+
