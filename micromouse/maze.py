@@ -4,13 +4,6 @@ from pathlib import Path
 
 from . import config
 
-# Compass convention (side->slot, side->step, mirror side) lives in config, the
-# layer below this one, so maze and the planner share one definition. Bound to
-# short local names here so the methods below read cleanly.
-WALL_INDEX = config.WALL_INDEX
-SIDE_DELTA = config.SIDE_DELTA
-OPPOSITE = config.OPPOSITE
-
 ### Maze Skeleton -----------------------------------------------------------------------------------
 
 """MazeStructure will hold all the information needed for logical step based solving. Any 
@@ -19,6 +12,7 @@ run separate MazeStructure objects for beliefs and for actual reality. Hardware 
 instance for its belief since solutions cannot be hardcoded.
 
     cells   : Dict of coordinate tuple keys and wall tuple values (x, y), (n, e, s, w)
+
 """
 
 class MazeStructure:
@@ -55,7 +49,7 @@ class MazeStructure:
 
     def cell_update(self, cell, compass, value):
         walls = list(self.cells[cell])
-        walls[WALL_INDEX[compass]] = value
+        walls[config.WALL_INDEX[compass]] = value
         self.cells[cell] = tuple(walls)
 
     """Record a wall on the `compass` side of `cell`, mirrored onto the neighbour so the shared wall 
@@ -63,11 +57,11 @@ class MazeStructure:
     is off-grid (a boundary wall has no cell to mirror onto)."""
     
     def mark_wall(self, cell, compass, value=1):
-        self.cell_update(cell, compass, value)
-        dx, dy = SIDE_DELTA[compass]
+        self.cell_update(cell, compass, value) # Call on same cell
+        dx, dy = config.SIDE_DELTA[compass]
         neighbour = (cell[0] + dx, cell[1] + dy)
         if neighbour in self.cells:
-            self.cell_update(neighbour, OPPOSITE[compass], value)
+            self.cell_update(neighbour, config.OPPOSITE[compass], value) # Call on neighbour cell for symmetry
 
 ### Maze Virtualisation -----------------------------------------------------------------------------
 
@@ -187,5 +181,5 @@ if __name__ == "__main__": # Blank maze loads, export and imports remain mirror 
     maze2 = MazeStructure(*num_file_import(config.DEFAULT_MAZE))
     print(maze2)
     num_file_export(f"{config.GENERATED_MAZES_DIR}/test_example4.num", maze2.cells)
-    print(maze2.cells)
+    # print(maze2.cells)
 

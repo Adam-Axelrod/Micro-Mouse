@@ -15,8 +15,6 @@ from .explorer import Explorer, flood_fill
 
 ### Sensing -----------------------------------------------------------------------------------------
 
-DIRECTIONS = config.DIRECTIONS  # ("n","e","s","w"): same slot order as a cell's wall tuple
-
 """Idealised wall read (EXP-3): look up the current cell's four edges in the real maze and return
 the absolute sides that have a wall. This is the ground-truth seam; everything downstream only sees
 the returned list. EXP-7 swaps this for a noisy 3-sensor read (left/right/front from `heading`,
@@ -24,7 +22,7 @@ rear inferred from entry) without the Explorer changing at all."""
 
 def read_walls(real_maze, pos):
     walls = real_maze.cells[pos]
-    return [side for flag, side in zip(walls, DIRECTIONS) if flag]
+    return [side for flag, side in zip(walls, config.DIRECTIONS) if flag]
 
 ### Exploration loop --------------------------------------------------------------------------------
 
@@ -91,4 +89,8 @@ if __name__ == "__main__":
         side = config.DELTA_SIDE[(b[0] - a[0], b[1] - a[1])]
         assert real.cells[a][config.WALL_INDEX[side]] == 0, f"walked through wall {side} at {a}"
 
-    print("real-maze path reached goal in", len(explored.path_done), "cells; crossed no real wall")
+    print(explored)
+    print(
+        f"real-maze path reached goal in {len(explored.path_done)} steps", 
+        f"({len(explored.optimal_from_known())} without doubling on itself)"
+        )

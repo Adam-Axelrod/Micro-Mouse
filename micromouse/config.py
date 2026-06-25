@@ -19,9 +19,10 @@ OPPOSITE = {"n": "s", "e": "w", "s": "n", "w": "e"}                  # mirror si
 WALL_INDEX = {side: i for i, side in enumerate(DIRECTIONS)}          # side -> slot in a wall tuple
 DELTA_SIDE = {delta: side for side, delta in SIDE_DELTA.items()}     # inverse of SIDE_DELTA
 
+START_POS = (0, 0)                                 # bottom-left cell; the mouse always starts here
+
 ### Maze attributes (all lengths in millimetres) ----------------------------
 
-# START_POS = (0,0) # Bottom left corner
 MM_PER_CELL = 180          # Centre-to-centre distance between cells.
 POST_SIDE_MM = 12          # Posts that hold up the walls, same width as the walls.
 WALL_WIDTH_MM = POST_SIDE_MM  # Makes the maze a maze, same width as the posts.
