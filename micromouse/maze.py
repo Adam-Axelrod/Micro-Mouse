@@ -16,11 +16,15 @@ instance for its belief since solutions cannot be hardcoded.
 """
 
 class MazeStructure:
-    def __init__(self, cells=None, rows=16, cols=16):
-        self.rows = rows
+    def __init__(self, cells=None, cols=16, rows=16):
         self.cols = cols
-        self.cells = cells if cells else self.generate_empty_maze(rows, cols)
+        self.rows = rows
+        self.cells = cells if cells else self.generate_empty_maze(cols, rows)
         self.goal = (self.cols // 2 - 1, self.rows // 2 - 1)
+
+    def copy(self):
+        """Return a new MazeStructure with a shallow-copied cells dict."""
+        return MazeStructure(cells=dict(self.cells), cols=self.cols, rows=self.rows)
 
     """Bare ASCII representation. Overlays (path, mouse) are a rendering concern,
     so they live in the free function to_ascii, not here."""
@@ -32,7 +36,7 @@ class MazeStructure:
         pass
 
     """Set all inner cells to (0,0,0,0) but add a hard perimeter wall."""
-    def generate_empty_maze(self, rows, cols):
+    def generate_empty_maze(self, cols, rows):
         cells = {}
         for y in range(rows):
             for x in range(cols):

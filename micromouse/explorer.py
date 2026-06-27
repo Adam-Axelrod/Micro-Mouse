@@ -9,13 +9,16 @@ from . import search_algorithms
 ### Explorer Class ----------------------------------------------------------------------------------
 
 """Works as the internal decision maker, something akin to following map instructions while building up memory. 
-Doesn't know its pixel/mm position but knows what step it is meant to be undertaking right now. self.pos functions 
-more as an indication of where the mouse should be now."""
+Doesn't know its pixel/mm position but knows what step it is meant to be undertaking right now."""
+
+"""pos - mouse is here or should be here, next_pos next waypoint"""
 
 class Explorer:
-    def __init__(self, belief_map=None):
+    def __init__(self, belief_map=None, destination=None, pos=None):
         self.belief_map = belief_map if belief_map else maze.MazeStructure()
-        self.pos = (0,0) # This is where the mouse should be - this class handles logic so all the sim has to do is bring the mouse here
+        self.destination = destination if destination else (self.belief_map.cols // 2 - 1, self.belief_map.rows // 2 - 1)
+        self.pos = pos if pos else (0,0)
+        self.next_pos = self.pos
         self.path_done = [self.pos]
         self.path_to_execute = []
         self.direction = config.DIRECTIONS[0] #turn by incrementing through this tuple
@@ -23,11 +26,14 @@ class Explorer:
     def __str__(self): # Same as MazeStructure but with Path and Mouse representation
         return maze.to_ascii(self.belief_map, self.optimal_from_known(), self.pos)
 
-    def at_goal(self):
-        return self.pos == self.belief_map.goal
+    def at_destination(self):
+        return self.pos == self.destination
 
-    def get_goal(self):
-        return self.belief_map.goal
+    def get_destination(self):
+        return self.destination
+
+    def set_pos(self, pos):
+        self.pos = pos
 
     def get_pos(self):
         return self.pos
@@ -35,12 +41,11 @@ class Explorer:
     def get_direction(self):
         return self.direction
 
-    def move_to_target(self, target): # teleport in step based solution, implement signal 
-        self.pos = target 
-        # append target coords to be reached which step will signal     
+    def move_to_target(self): # this is more for updating internal logic, mouse body uses this function to update where it should be
+        self.pos = self.next_pos # does not actually control mouse location
+        self.path_done.append(self.pos)
+        self.path_to_execute.pop(0)
         return
-
-    """Lets the caller of this function know which cell it needs to get to by changing self.pos"""
 
     def step(self):
         if not self.path_to_execute:
@@ -56,9 +61,8 @@ class Explorer:
             self.direction = turn_clockwise(self.direction) # if not rotate clockwise
             return
 
-        self.pos = target
-        self.path_done.append(target)
-        self.path_to_execute.pop(0)
+        self.next_pos = target
+        self.move_to_target()
 
     """Fold sensed walls into the belief. `sensed_sides` is a list of absolute compass sides
     (subset of n/e/s/w) a sensor reported as walled at `cell`. This is the ONLY channel by which
@@ -73,7 +77,7 @@ class Explorer:
     """Prints path done but removes any loops that cause it to visit the same cell twice."""
 
     def optimal_from_known(self):
-        if not self.at_goal():
+        if not self.at_destination():
             return []
         route = []
         seen = {}                                 # cell -> its index in route

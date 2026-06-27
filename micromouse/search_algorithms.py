@@ -1,6 +1,5 @@
 ### Imports ----------------------------------------------------------------------------------------- 
 
-from micromouse.explorer import Explorer
 from collections import deque
 
 from . import config
@@ -82,7 +81,7 @@ def hug_left(maze, position):
 
 if __name__ == "__main__":
     # flood_fill plans a shortest route over the (optimistic) belief.
-    ex = Explorer()
+    ex = explorer.Explorer()
     route = flood_fill(ex.belief_map, ex.pos)
     print("planned route on blank belief:", route)
     assert route[0] == ex.pos and route[-1] == ex.belief_map.goal # starts at start and ends at goal

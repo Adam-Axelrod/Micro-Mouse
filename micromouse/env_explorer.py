@@ -11,7 +11,8 @@ later (EXP-7). Run with: python -m micromouse.env_explorer
 
 from . import config
 from . import maze
-from .explorer import Explorer, flood_fill
+from . import search_algorithms
+from .explorer import Explorer
 
 ### Sensing -----------------------------------------------------------------------------------------
 
@@ -39,13 +40,12 @@ detecting surprises, so a wall is always already in the belief before we try to 
 
 Returns the Explorer so callers can read pos, path_done and the belief."""
 
-def explore(real_maze, belief=None, algo=flood_fill):
+def explore(real_maze, belief=None, algo=search_algorithms.flood_fill):
     if belief is None:
-        belief = maze.MazeStructure(rows=real_maze.rows, cols=real_maze.cols)  # blank, same size
+        belief = maze.MazeStructure(cols=real_maze.cols, rows=real_maze.rows)  # blank, same size
     ex = Explorer(belief_map=belief)
-    ex.path_done = [ex.pos]                                # record the start cell
 
-    while not ex.at_goal():
+    while not ex.at_destination():
         ex.observe(ex.pos, read_walls(real_maze, ex.pos))  # sense -> belief
         route = algo(ex.belief_map, ex.pos)                # plan over belief
         if len(route) < 2:
@@ -57,32 +57,26 @@ def explore(real_maze, belief=None, algo=flood_fill):
     return ex
 
 
-"""Omniscient solve: seed the belief with a copy of the real maze, then run the same loop. The
-tuple wall-values are immutable, so a shallow dict copy is a safe independent belief."""
+"""Omniscient solve: seed the belief with a copy of the real maze, then run the same loop."""
 
-def explore_omniscient(real_maze, algo=flood_fill):
-    belief = maze.MazeStructure(cells=dict(real_maze.cells),
-                                rows=real_maze.rows, cols=real_maze.cols)
+def explore_omniscient(real_maze, algo=search_algorithms.flood_fill):
+    belief = real_maze.copy()
     return explore(real_maze, belief=belief, algo=algo)
 
 ### Tests -------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    # 1. Empty maze: the mouse should walk north then east to the centre using only sensed walls.
-    empty = maze.MazeStructure()
+    empty = maze.MazeStructure() # Empty maze test - up and right
     ex = explore(empty)
     print(ex)
     print("blank-belief path:", ex.path_done)
-    assert ex.at_goal(), "did not reach the goal on the empty maze"
+    assert ex.at_destination(), "did not reach the goal on the empty maze"
 
-    # 2. A real maze: blank-belief exploration must still reach the goal, and the cells it walked
-    #    must match the omniscient shortest path's length on a maze with a unique route. We assert
-    #    the weaker, always-true property: both reach the goal, and exploration crosses no real wall.
-    real = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE))
+    real = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE)) # Real maze solve
     explored = explore(real)
-    omniscient = explore_omniscient(real)
-    assert explored.at_goal(), "blank-belief exploration failed to reach the goal"
-    assert omniscient.at_goal(), "omniscient solve failed to reach the goal"
+    omniscient = explore_omniscient(real) # Perfect information run
+    assert explored.at_destination(), "blank-belief exploration failed to reach the goal"
+    assert omniscient.at_destination(), "omniscient solve failed to reach the goal"
 
     # No step in the explored path crossed a real wall (belief-vs-reality check).
     for a, b in zip(explored.path_done, explored.path_done[1:]):
