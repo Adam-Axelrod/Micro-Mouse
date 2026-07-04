@@ -29,13 +29,15 @@ def open_neighbours(maze, cell):
     return neighbours
 
 
-"""The flood itself: breadth-first from the goal outward, labelling every cell with its step-distance to
-the goal through open edges. The goal is 0 and distance grows by 1 each ring out. Cells walled off from 
-the goal are absent."""
+"""The flood itself: breadth-first from the destination outward, labelling every cell with its
+step-distance to the destination through open edges. The destination is 0 and distance grows by 1 each
+ring out. Cells walled off from the destination are absent. The destination is whatever the caller is
+heading for right now (the maze centre on the way out, the start on a return run), NOT a fixed maze
+property, so it is passed in rather than read from maze.goal."""
 
-def flood_distances(maze, goal):
-    distances = {goal: 0} # Distance dict
-    frontier = deque([goal])
+def flood_distances(maze, destination):
+    distances = {destination: 0} # Distance dict
+    frontier = deque([destination])
     while frontier:
         cell = frontier.popleft()
         for nxt in open_neighbours(maze, cell):
@@ -44,21 +46,27 @@ def flood_distances(maze, goal):
                 frontier.append(nxt)
     return distances
 
-"""Plan a route from `position` to maze.goal over the given belief map.
+"""Plan a route from `position` to `destination` over the given belief map.
 
-1. Flood distance-to-goal across the maze (flood_distances).
-2. From `position`, keep stepping to the open neighbour with the lowest distance until we stand on 
-the goal: always walking downhill on the distance field is guaranteed to be a shortest path.
+`destination` is where we are heading right now; it defaults to maze.goal (the centre) for the outward
+explore, and the caller passes the start cell for the return run. It is not necessarily the maze's
+fixed goal, which is why it is a parameter.
 
-Returns the list of cells [position, ..., goal]; empty if the goal is unreachable from `position`."""
+1. Flood distance-to-destination across the maze (flood_distances).
+2. From `position`, keep stepping to the open neighbour with the lowest distance until we stand on
+the destination: always walking downhill on the distance field is guaranteed to be a shortest path.
 
-def flood_fill(maze, position):
-    distances = flood_distances(maze, maze.goal)
-    if position not in distances: # the goal can't be reached from here
+Returns the list of cells [position, ..., destination]; empty if it is unreachable from `position`."""
+
+def flood_fill(maze, position, destination=None):
+    if destination is None:
+        destination = maze.goal
+    distances = flood_distances(maze, destination)
+    if position not in distances: # the destination can't be reached from here
         return []
 
     path = [position]
-    while path[-1] != maze.goal:
+    while path[-1] != destination:
         cell = path[-1]
         best_cell = None # Find the neighbour that is strictly closer to the goal than we are.
         best_distance = distances[cell]
@@ -66,7 +74,7 @@ def flood_fill(maze, position):
             if distances.get(neighbour, float("inf")) < best_distance:
                 best_distance = distances[neighbour]
                 best_cell = neighbour
-        if best_cell is None: # nothing nearer the goal: dead end, stop
+        if best_cell is None: # nothing nearer the destination: dead end, stop
             break
         path.append(best_cell)
 
@@ -74,7 +82,7 @@ def flood_fill(maze, position):
 
 ### Hug Left ----------------------------------------------------------------------------------------
 
-def hug_left(maze, position):
+def hug_left(maze, position, destination=None):
     pass
 
 ### Tests -------------------------------------------------------------------------------------------

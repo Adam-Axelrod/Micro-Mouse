@@ -17,7 +17,7 @@ DIRECTIONS = ("n", "e", "s", "w")                  # side order; also the (n,e,s
 SIDE_DELTA = {"n": (0, 1), "e": (1, 0), "s": (0, -1), "w": (-1, 0)}  # (dx, dy) step per side
 OPPOSITE = {"n": "s", "e": "w", "s": "n", "w": "e"}                  # mirror side across a shared wall
 WALL_INDEX = {side: i for i, side in enumerate(DIRECTIONS)}          # side -> slot in a wall tuple
-DELTA_SIDE = {delta: side for side, delta in SIDE_DELTA.items()}     # inverse of SIDE_DELTA
+DELTA_SIDE = {delta: side for side, delta in SIDE_DELTA.items()}     # inverse of SIDE_DELTA {(0,1):"n", ...}
 
 START_POS = (0, 0)                                 # bottom-left cell; the mouse always starts here
 
@@ -38,8 +38,7 @@ TRACK_WIDTH_MM = 70  # PROVISIONAL: wheel separation. MEASURE on chassis (story 
 ### Encoder (provisional; confirm by SIM-4 / HW-1) --------------------------
 # Encoder rule: keep ONE measured count here, derive everything else from it.
 # Every distance is ticks * MM_PER_TICK, so this cannot drift out of sync.
-ENCODER_COUNTS_PER_WHEEL_REV = 500  # PROVISIONAL: full-quadrature counts per wheel rev.
-                                    # CONFIRM: push robot a measured distance, read ticks (HW-1).
+ENCODER_COUNTS_PER_WHEEL_REV = 1400  # TESTED: full-quadrature counts per wheel rev.
 MM_PER_TICK = WHEEL_CIRCUMFERENCE_MM / ENCODER_COUNTS_PER_WHEEL_REV  # ~0.20 mm/tick; derived.
 
 ### Render-only pixel scale (no logic code reads pixels) ---------------------

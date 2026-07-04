@@ -26,9 +26,12 @@ class Explorer:
     def __str__(self): # Same as MazeStructure but with Path and Mouse representation
         return maze.to_ascii(self.belief_map, self.optimal_from_known(), self.pos)
 
+    def at_goal(self):
+        return self.pos == self.belief_map.goal
+
     def at_destination(self):
         return self.pos == self.destination
-
+    
     def get_destination(self):
         return self.destination
 

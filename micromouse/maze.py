@@ -6,8 +6,7 @@ from . import config
 
 ### Maze Skeleton -----------------------------------------------------------------------------------
 
-"""MazeStructure will hold all the information needed for logical step based solving. Any 
-mms interaction can ignore MazeVirtualisation and interact with this class only. Simulations will 
+"""MazeStructure will hold all the information needed for logical step based solving. Simulations will 
 run separate MazeStructure objects for beliefs and for actual reality. Hardware will have a single
 instance for its belief since solutions cannot be hardcoded.
 
@@ -22,18 +21,19 @@ class MazeStructure:
         self.cells = cells if cells else self.generate_empty_maze(cols, rows)
         self.goal = (self.cols // 2 - 1, self.rows // 2 - 1)
 
-    def copy(self):
-        """Return a new MazeStructure with a shallow-copied cells dict."""
-        return MazeStructure(cells=dict(self.cells), cols=self.cols, rows=self.rows)
-
     """Bare ASCII representation. Overlays (path, mouse) are a rendering concern,
     so they live in the free function to_ascii, not here."""
     def __str__(self):
         return to_ascii(self)
 
+    """Return a new MazeStructure with a shallow-copied cells dict. Allows MazeStructure objects
+    to be copied without affecting the original object"""
+    def copy(self):
+        return MazeStructure(cells=dict(self.cells), cols=self.cols, rows=self.rows)
+
     """Future method for when we want to return more info than just the ascii representation"""
     def print_status(self):
-        pass
+        print(f"Goal: {self.goal}")
 
     """Set all inner cells to (0,0,0,0) but add a hard perimeter wall."""
     def generate_empty_maze(self, cols, rows):
@@ -50,7 +50,6 @@ class MazeStructure:
     """Set one wall of `cell` to `value`. Updates one cell only. A wall is shared between two cells, so a
     caller wanting the belief consistent must also set the mirrored side on the neighbour (e.g. setting 
     'n' here means setting 's' on the cell above)."""
-
     def cell_update(self, cell, compass, value):
         walls = list(self.cells[cell])
         walls[config.WALL_INDEX[compass]] = value
@@ -59,7 +58,6 @@ class MazeStructure:
     """Record a wall on the `compass` side of `cell`, mirrored onto the neighbour so the shared wall 
     reads the same from both cells. Calls cell_update on said cell. Skips the mirror when the neighbour 
     is off-grid (a boundary wall has no cell to mirror onto)."""
-    
     def mark_wall(self, cell, compass, value=1):
         self.cell_update(cell, compass, value) # Call on same cell
         dx, dy = config.SIDE_DELTA[compass]
@@ -67,26 +65,45 @@ class MazeStructure:
         if neighbour in self.cells:
             self.cell_update(neighbour, config.OPPOSITE[compass], value) # Call on neighbour cell for symmetry
 
-### Maze Virtualisation -----------------------------------------------------------------------------
+### Maze Geometry -----------------------------------------------------------------------------
 
-# """
-# MazeVirtualisation will accept a MazeStructure object to generate a simulacrum of the maze where
-# relative distances matter. Odometry and wall sensor simulation will use this class.
+"""
+MazeGeometry will accept a MazeStructure object to generate a simulacrum of the maze where
+relative distances matter. Odometry and wall sensor simulation will use this class.
 
-# 0,0 at bottom left corner of bottom left post, pixel mm ratio not yet decided (can be adjustable??)
-# """
-# class MazeVirtualisation:
-#     def __init__(self, structure):
-#         self.structure = structure # Accepts a MazeStructure object
-#         self.walls = self.generate_wall_polygons(structure.cells)
+0,0 at bottom left corner of bottom left post, pixel mm ratio not yet decided (can be adjustable??)
+"""
+class MazeGeometry:
+    def __init__(self, structure):
+        self.structure = structure # Accepts a MazeStructure object
+        self.posts = self.generate_post_polygons(structure.cells)
+        self.walls = self.generate_wall_polygons(structure.cells)
 
-#     def generate_wall_polygons(self, cells):
-#         pass
-#     """
-#     tba 
-#     def update beliefs
-#     def return structure
-#     """
+    def __str__(self):
+        return to_ascii(self.structure)
+
+    def generate_post_polygons(self):
+        # generate a grid of posts 
+
+        lattice_points = []
+
+    def generate_wall_polygons(self):
+        # generate a series of wall polygons where the bottom left maze post starts at 0,0
+        for cell in self.cells:
+            pass
+
+
+    
+    def add_wall(self, cell):
+        pass
+
+
+
+    """
+    tba 
+    def update beliefs
+    def return structure
+    """
 
 
 ### File Operations ---------------------------------------------------------------------------------
@@ -131,7 +148,7 @@ def num_file_export(path, cells):
 def available_mazes(mazes_dir):
     return sorted(Path(mazes_dir).glob("*.num"))
 
-### Terminal Operations -----------------------------------------------------------------------------
+### General Functions -------------------------------------------------------------------------------
 
 """Render a maze as ASCII, optionally overlaying a path and/or the mouse.
     maze  : any object with .rows, .cols and .cells[(x, y)] -> (n, e, s, w)
