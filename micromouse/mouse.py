@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from . import config
-from . import maze
-from .explorer import Explorer
+import config
+import maze
+from explorer import Explorer
 
 ### Mouse Class -------------------------------------------------------------------------------------
 

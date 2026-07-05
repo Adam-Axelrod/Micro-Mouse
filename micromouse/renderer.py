@@ -1,7 +1,7 @@
 import pygame
 
-from . import config
-from . import maze
+import config
+import maze
 
 ### Renderer Class-----------------------------------------------------------------------------------
 

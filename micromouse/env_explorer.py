@@ -6,11 +6,11 @@ later (EXP-7).
 
 import time
 
-from . import config
-from . import maze
-from . import search_algorithms
-from .explorer import Explorer
-from .renderer import Renderer
+import config
+import maze
+import search_algorithms
+from explorer import Explorer
+from renderer import Renderer
 
 ### Sensing -----------------------------------------------------------------------------------------
 

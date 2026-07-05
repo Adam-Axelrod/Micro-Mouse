@@ -1,8 +1,7 @@
 """ use python -m micromouse_new.maze for testing"""
 
-from pathlib import Path
-
-from . import config
+# from pathlib import Path
+import config
 
 ### Maze Skeleton -----------------------------------------------------------------------------------
 
@@ -153,10 +152,9 @@ class MazeGeometry:
 """
 .num schema (one line per cell, space-separated, no header):
     x y N E S W
-x, y are 0-based cell coordinates. N E S W are wall flags (0 or 1) in fixed
-north/east/south/west order. Direction convention: n=+y, e=+x, s=-y, w=-x.
-So (0, 0) is the bottom-left cell. Reader and writer below are inverses of each
-other; a hand-verified fixture pins the convention to ground truth.
+x, y are 0-based cell coordinates. N E S W are wall flags (0 or 1) in fixed north/east/south/west order. 
+Direction convention: n=+y, e=+x, s=-y, w=-x. So (0, 0) is the bottom-left cell. Reader and writer below 
+are inverses of each other.
 """
 
 """Read a .num file into a cells dict. Returns (cells, cols, rows)."""
@@ -186,9 +184,9 @@ def num_file_export(path, cells):
                 f.write(f"{x} {y} {int(n)} {int(e)} {int(s)} {int(w)}\n")
 
 
-"""List all `.num` maze files in a directory, sorted by name."""
-def available_mazes(mazes_dir):
-    return sorted(Path(mazes_dir).glob("*.num"))
+# """List all `.num` maze files in a directory, sorted by name."""
+# def available_mazes(mazes_dir):
+#     return sorted(Path(mazes_dir).glob("*.num"))
 
 ### General Functions -------------------------------------------------------------------------------
 

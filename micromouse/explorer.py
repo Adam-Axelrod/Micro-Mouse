@@ -1,6 +1,6 @@
 
-from . import config
-from . import maze
+import config
+import maze
 
 ### Explorer Class ----------------------------------------------------------------------------------
 
@@ -10,7 +10,7 @@ Doesn't know its pixel/mm position but knows what step it is meant to be underta
 """pos - mouse is here or should be here, next_pos next waypoint"""
 
 class Explorer:
-    def __init__(self, belief_map=None, destination=None, pos=None, render=True):
+    def __init__(self, belief_map=None, destination=None, pos=None):
         self.belief_map = belief_map if belief_map else maze.MazeStructure()
         self.destination = destination if destination else self.belief_map.goal
         self.pos = pos if pos else (0,0)
@@ -57,11 +57,14 @@ class Explorer:
 
         needed = config.DELTA_SIDE[delta] # check if pointing at next cell
         if self.direction != needed:
-            self.direction = turn_clockwise(self.direction) # if not rotate clockwise
+            self.direction = self.turn_clockwise(self.direction) # if not rotate clockwise
             return
 
         self.next_pos = target
         self.move_to_target()
+
+    def turn_clockwise(direction): #One clockwise pivot: n -> e -> s -> w -> n
+        return config.DIRECTIONS[(config.DIRECTIONS.index(direction) + 1) % len(config.DIRECTIONS)]
 
     """Fold sensed walls into the belief. `sensed_sides` is a list of absolute compass sides
     (subset of n/e/s/w) a sensor reported as walled at `cell`. This is the ONLY channel by which
@@ -89,16 +92,6 @@ class Explorer:
                 seen[cell] = len(route)
                 route.append(cell)
         return route
-
-        
-### Generic Movement Functions ----------------------------------------------------------------------
-
-"""One clockwise pivot: n -> e -> s -> w -> n. Incrementing the index into DIRECTIONS IS a clockwise 
-turn, which is why the mouse can only ever turn one way for now (a real mouse would also turn left; 
-that is a later optimisation)."""
-
-def turn_clockwise(direction):
-    return config.DIRECTIONS[(config.DIRECTIONS.index(direction) + 1) % len(config.DIRECTIONS)]
 
 ### Tests -------------------------------------------------------------------------------------------
 
