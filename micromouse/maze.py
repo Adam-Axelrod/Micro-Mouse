@@ -9,34 +9,25 @@ from . import config
 """MazeStructure will hold all the information needed for logical step based solving. Simulations will 
 run separate MazeStructure objects for beliefs and for actual reality. Hardware will have a single
 instance for its belief since solutions cannot be hardcoded.
-
-    cells   : Dict of coordinate tuple keys and wall tuple values (x, y), (n, e, s, w)
-
 """
 
 class MazeStructure:
     def __init__(self, cells=None, cols=16, rows=16):
-        self.cols = cols
-        self.rows = rows
+        self.cols  = cols
+        self.rows  = rows
         self.cells = cells if cells else self.generate_empty_maze(cols, rows)
-        self.goal = (self.cols // 2 - 1, self.rows // 2 - 1)
+        self.goal  = (self.cols // 2 - 1, self.rows // 2 - 1)
 
-    """Bare ASCII representation. Overlays (path, mouse) are a rendering concern,
-    so they live in the free function to_ascii, not here."""
     def __str__(self):
-        return to_ascii(self)
+        return to_ascii(self) # Prints an ascii maze
 
-    """Return a new MazeStructure with a shallow-copied cells dict. Allows MazeStructure objects
-    to be copied without affecting the original object"""
-    def copy(self):
+    def copy(self): #Allows MazeStructure objects to be copied without affecting the original object
         return MazeStructure(cells=dict(self.cells), cols=self.cols, rows=self.rows)
 
-    """Future method for when we want to return more info than just the ascii representation"""
-    def print_status(self):
+    def print_status(self): #Future method for when we want to return more info than just the ascii representation
         print(f"Goal: {self.goal}")
 
-    """Set all inner cells to (0,0,0,0) but add a hard perimeter wall."""
-    def generate_empty_maze(self, cols, rows):
+    def generate_empty_maze(self, cols, rows): #Set all inner cells to (0,0,0,0) but add a hard perimeter wall.
         cells = {}
         for y in range(rows):
             for x in range(cols):
@@ -51,8 +42,9 @@ class MazeStructure:
     caller wanting the belief consistent must also set the mirrored side on the neighbour (e.g. setting 
     'n' here means setting 's' on the cell above)."""
     def cell_update(self, cell, compass, value):
+        side = config.WALL_INDEX[compass]
         walls = list(self.cells[cell])
-        walls[config.WALL_INDEX[compass]] = value
+        walls[side] = value
         self.cells[cell] = tuple(walls)
 
     """Record a wall on the `compass` side of `cell`, mirrored onto the neighbour so the shared wall 
@@ -60,7 +52,7 @@ class MazeStructure:
     is off-grid (a boundary wall has no cell to mirror onto)."""
     def mark_wall(self, cell, compass, value=1):
         self.cell_update(cell, compass, value) # Call on same cell
-        dx, dy = config.SIDE_DELTA[compass]
+        dx, dy = config.SIDE_DELTA[compass] # Step to neighbour (1 step up, right, down or left)
         neighbour = (cell[0] + dx, cell[1] + dy)
         if neighbour in self.cells:
             self.cell_update(neighbour, config.OPPOSITE[compass], value) # Call on neighbour cell for symmetry
@@ -70,41 +62,91 @@ class MazeStructure:
 """
 MazeGeometry will accept a MazeStructure object to generate a simulacrum of the maze where
 relative distances matter. Odometry and wall sensor simulation will use this class.
-
 0,0 at bottom left corner of bottom left post, pixel mm ratio not yet decided (can be adjustable??)
 """
 class MazeGeometry:
     def __init__(self, structure):
-        self.structure = structure # Accepts a MazeStructure object
-        self.posts = self.generate_post_polygons(structure.cells)
-        self.walls = self.generate_wall_polygons(structure.cells)
+        self.structure             = structure # Accepts a MazeStructure object
+        self.posts                 = self.generate_post_polygons()
+        self.h_walls, self.v_walls = self.generate_wall_polygons()
+        self.boundaries            = self.generate_boundary_lines()
 
     def __str__(self):
         return to_ascii(self.structure)
 
     def generate_post_polygons(self):
-        # generate a grid of posts 
+        post_size  = config.POST_SIDE_MM     # 12 mm square peg
+        cell_pitch = config.MM_PER_CELL      # The spacing between posts
+        num_cols   = self.structure.cols
+        num_rows   = self.structure.rows
 
-        lattice_points = []
+        posts = {}
+        for post_col in range(num_cols + 1):
+            for post_row in range(num_rows + 1):
+                left   = post_col * cell_pitch          # this post's bottom-left corner
+                bottom = post_row * cell_pitch
+                right  = left + post_size
+                top    = bottom + post_size
+                posts[(post_col, post_row)] = (
+                    (left,  bottom),    # BL
+                    (right, bottom),    # BR
+                    (right, top),       # TR
+                    (left,  top),       # TL
+                )
+        return posts # {(x,y), (BL,BR,TR,TL)} - lattice coord + sim corner coords
 
     def generate_wall_polygons(self):
-        # generate a series of wall polygons where the bottom left maze post starts at 0,0
-        for cell in self.cells:
-            pass
+        post_size  = config.POST_SIDE_MM
+        cell_pitch = config.MM_PER_CELL
+        num_cols   = self.structure.cols
+        num_rows   = self.structure.rows
+        cells      = self.structure.cells
 
+        north = config.WALL_INDEX["n"]       # slot positions in a (n,e,s,w) tuple
+        east  = config.WALL_INDEX["e"]
+        south = config.WALL_INDEX["s"]
+        west  = config.WALL_INDEX["w"]
 
+        h_walls = {}
+        v_walls = {}
+
+        # span_col/row aligns with cell, line_col/row sits between cells
+        # horizontal walls: sit on a row grid-line, span one cell across in x
+        for span_col in range(num_cols):
+            for line_row in range(num_rows + 1): # .get() returns None if cell non-existent - no index error
+                cell_above = cells.get((span_col, line_row))       # line is this cell's south edge
+                cell_below = cells.get((span_col, line_row - 1))   # line is this cell's north edge
+                present = (cell_above and cell_above[south]) or (cell_below and cell_below[north])
+                if present:
+                    left   = span_col * cell_pitch + post_size     # start just past the left post
+                    right  = (span_col + 1) * cell_pitch           # stop at the right post
+                    bottom = line_row * cell_pitch
+                    top    = bottom + post_size
+                    h_walls[(span_col, line_row)] = (
+                        (left, bottom), (right, bottom), (right, top), (left, top)
+                    )
+
+        # vertical walls: sit on a column grid-line, span one cell up in y
+        for line_col in range(num_cols + 1):
+            for span_row in range(num_rows):
+                cell_right = cells.get((line_col, span_row))       # line is this cell's west edge
+                cell_left  = cells.get((line_col - 1, span_row))   # line is this cell's east edge
+                present = (cell_right and cell_right[west]) or (cell_left and cell_left[east])
+                if present:
+                    left   = line_col * cell_pitch
+                    right  = left + post_size
+                    bottom = span_row * cell_pitch + post_size     # start just above the bottom post
+                    top    = (span_row + 1) * cell_pitch           # stop at the top post
+                    v_walls[(line_col, span_row)] = (
+                        (left, bottom), (right, bottom), (right, top), (left, top)
+                    )
+        return h_walls, v_walls # {(x,y), (BL,BR,TR,TL)} - placement + sim corner coords
     
-    def add_wall(self, cell):
+    def generate_boundary_lines(self):
+        pass # use self.h_walls, self.v_walls and self.posts
+
+    def add_wall(self, cell, orientation):
         pass
-
-
-
-    """
-    tba 
-    def update beliefs
-    def return structure
-    """
-
 
 ### File Operations ---------------------------------------------------------------------------------
 

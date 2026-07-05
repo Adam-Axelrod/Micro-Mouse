@@ -1,10 +1,6 @@
-### Imports ----------------------------------------------------------------------------------------- 
-
-from pathlib import Path
 
 from . import config
 from . import maze
-from . import search_algorithms
 
 ### Explorer Class ----------------------------------------------------------------------------------
 
@@ -14,9 +10,9 @@ Doesn't know its pixel/mm position but knows what step it is meant to be underta
 """pos - mouse is here or should be here, next_pos next waypoint"""
 
 class Explorer:
-    def __init__(self, belief_map=None, destination=None, pos=None):
+    def __init__(self, belief_map=None, destination=None, pos=None, render=True):
         self.belief_map = belief_map if belief_map else maze.MazeStructure()
-        self.destination = destination if destination else (self.belief_map.cols // 2 - 1, self.belief_map.rows // 2 - 1)
+        self.destination = destination if destination else self.belief_map.goal
         self.pos = pos if pos else (0,0)
         self.next_pos = self.pos
         self.path_done = [self.pos]
@@ -93,6 +89,7 @@ class Explorer:
                 seen[cell] = len(route)
                 route.append(cell)
         return route
+
         
 ### Generic Movement Functions ----------------------------------------------------------------------
 

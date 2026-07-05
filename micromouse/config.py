@@ -32,7 +32,15 @@ WALL_LENGTH_MM = 168       # Long side of a wall.
 
 WHEEL_DIAMETER_MM = 32                                  # Pololu 32x7 wheel.
 WHEEL_CIRCUMFERENCE_MM = math.pi * WHEEL_DIAMETER_MM    # ~100.53 mm; derived, never hard-coded.
-TRACK_WIDTH_MM = 70  # PROVISIONAL: wheel separation. MEASURE on chassis (story 9.2).
+TRACK_WIDTH_MM = 70  # MEASURED: wheel-centre to wheel-centre on the Gemini chassis (story 9.2).
+
+### Body frame (collision box, story section 9) -----------------------------
+# MEASURED on the Gemini chassis. Used for the oriented collision box, not for
+# kinematics (that's TRACK_WIDTH_MM above).
+BODY_LENGTH_MM = 100                       # Full chassis length, back edge to front edge.
+BODY_WIDTH_MM = 80                         # Full chassis width.
+WHEEL_AXIS_TO_BACK_MM = 36                 # Wheel axis to back edge of chassis.
+WHEEL_AXIS_TO_FRONT_MM = BODY_LENGTH_MM - WHEEL_AXIS_TO_BACK_MM  # 64 mm; derived.
 # MAX_SPEED = No #m/s or turns tbd
 
 ### Encoder (provisional; confirm by SIM-4 / HW-1) --------------------------
@@ -43,7 +51,7 @@ MM_PER_TICK = WHEEL_CIRCUMFERENCE_MM / ENCODER_COUNTS_PER_WHEEL_REV  # ~0.20 mm/
 
 ### Render-only pixel scale (no logic code reads pixels) ---------------------
 
-PX_PER_MM = 0.5                          # Render scale only.
+PX_PER_MM = 0.25                         # Render scale only.
 TILE_PX = MM_PER_CELL * PX_PER_MM        # Pixel size of one cell when drawing.
 
 
@@ -56,7 +64,8 @@ TILE_PX = MM_PER_CELL * PX_PER_MM        # Pixel size of one cell when drawing.
 | Wheel diameter | 32 mm (Pololu 32x7) | FIXED | Circumference = pi x 32 = 100.53 mm. |
 | Cell in wheel revs | 180 / 100.53 = 1.79 rev | FIXED | Do not assume exactly 1 rev per cell. |
 | Top speed | ~1.0 m/s no-load | FIXED-ish | N20 ~600 rpm at 12 V x 100.5 mm. Cap lower for safety. |
-| Track width (wheel separation) | MEASURE | MEASURE | Needed for differential-drive kinematics. Measure on the chassis; put a named provisional in config. |
+| Track width (wheel separation) | 70 mm | MEASURED | Needed for differential-drive kinematics. Confirmed on chassis 2026-07-05. |
+| Body frame (L x W) | 100 x 80 mm | MEASURED | Wheel axis 36 mm from back edge, 64 mm from front. Collision box, story section 9. |
 | Motor | N20 micro metal gearmotor | FIXED | Brushed DC, gearbox. |
 | Encoder | magnetic Hall quadrature | FIXED | On the motor shaft. Counts per wheel rev = CPR_at_shaft x gear_ratio (full quadrature). |
 | Encoder resolution | ~0.2 mm/tick, ~900 ticks/cell | MEASURE | Order of magnitude only. Confirm exact CPR and gear ratio (SIM-4, HW-1). |

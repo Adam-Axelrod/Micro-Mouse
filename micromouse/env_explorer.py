@@ -1,18 +1,16 @@
-"""Env adapter for the Explorer (EXP-3/EXP-4).
-
-This is the ONLY layer that holds the real maze. It senses walls from ground
-truth, feeds them to the Explorer as plain compass sides, asks the Explorer to
-plan over its belief, and drives one cell. The Explorer itself never sees the
-real maze, so the same brain runs unchanged on noisy sensors or real hardware
-later (EXP-7). Run with: python -m micromouse.env_explorer
+"""Only layer that holds the real maze. It senses walls from ground truth, feeds them to the Explorer 
+as plain compass sides, asks the Explorer to plan over its belief, and drives one cell. The Explorer 
+itself never sees the real maze, so the same brain runs unchanged on noisy sensors or real hardware
+later (EXP-7).
 """
 
-### Imports -----------------------------------------------------------------------------------------
+import time
 
 from . import config
 from . import maze
 from . import search_algorithms
 from .explorer import Explorer
+from .renderer import Renderer
 
 ### Sensing -----------------------------------------------------------------------------------------
 
@@ -40,19 +38,23 @@ detecting surprises, so a wall is always already in the belief before we try to 
 
 Returns the Explorer so callers can read pos, path_done and the belief."""
 
-def explore(real_maze, belief=None, algo=search_algorithms.flood_fill): # belief is a MazeStructure object
+def explore(real_maze, belief=None, algo=search_algorithms.flood_fill): # belief is a MazeStructure object, algo is a search algorithm that 
     if belief is None:
         belief = maze.MazeStructure(cols=real_maze.cols, rows=real_maze.rows)  # blank, same size
     ex = Explorer(belief_map=belief)
+    render_object = Renderer(maze.MazeGeometry(real_maze))
 
     while not ex.at_goal():
         ex.observe(ex.pos, read_walls(real_maze, ex.pos))  # sense -> belief
         route = algo(ex.belief_map, ex.pos)                # plan over belief
+        render_object.draw(belief=ex.belief_map, mouse=None, path=route)
         if len(route) < 2:
             break                                          # boxed in / dead-end (EXP-5 will handle)
         ex.path_to_execute = [route[1]]                    # commit to one cell only
         while ex.path_to_execute:                          # pivot, then drive onto it
             ex.step()
+
+        time.sleep(0.1)
 
     return ex
 
@@ -63,28 +65,34 @@ def explore_omniscient(real_maze, algo=search_algorithms.flood_fill):
     belief = real_maze.copy()
     return explore(real_maze, belief=belief, algo=algo)
 
-### Tests -------------------------------------------------------------------------------------------
 
-if __name__ == "__main__":
+def step_test(test_maze):
     empty = maze.MazeStructure() # Empty maze test - up and right
     ex = explore(empty)
     print(ex)
     print("blank-belief path:", ex.path_done)
-    print(ex.at_destination(), "did not reach the goal on the empty maze")
+    print(ex.at_goal(), "(reach the goal on the empty maze)")
 
-    real = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE)) # Real maze solve
+    real = maze.MazeStructure(*test_maze) # Real maze solve
     explored = explore(real)
-    omniscient = explore_omniscient(real) # Perfect information run
-    print(explored.at_destination(), "blank-belief exploration failed to reach the goal")
-    print(omniscient.at_destination(), "omniscient solve failed to reach the goal")
-
+    print(explored.at_goal(), "(blank-belief exploration reached the goal)")
     # No step in the explored path crossed a real wall (belief-vs-reality check).
     for a, b in zip(explored.path_done, explored.path_done[1:]):
         side = config.DELTA_SIDE[(b[0] - a[0], b[1] - a[1])]
         assert real.cells[a][config.WALL_INDEX[side]] == 0, f"walked through wall {side} at {a}"
-
     print(explored)
     print(
         f"real-maze path reached goal in {len(explored.path_done)} steps", 
         f"({len(explored.optimal_from_known())} without doubling on itself)"
         )
+    print("discovery path:", explored.path_done)
+
+    omniscient = explore_omniscient(real) # Perfect information run
+    print(omniscient.at_goal(), "(omniscient solve reached the goal)")
+
+
+### Tests -------------------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+
+    step_test(maze.num_file_import(config.DEFAULT_MAZE))
