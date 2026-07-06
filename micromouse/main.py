@@ -138,3 +138,9 @@ while True:
 leftMezzLED.off()
 rightMezzLED.off()
 stop_motors()
+
+maze_test = maze.MazeStructure()
+# search_algo (maze_test, 0,0)
+#-> list of coordinates
+
+#
