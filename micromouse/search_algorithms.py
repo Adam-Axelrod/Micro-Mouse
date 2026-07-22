@@ -2,9 +2,9 @@
 
 from collections import deque
 
-from . import config
-from . import maze
-from . import explorer
+import config
+import maze
+import explorer
 
 ### Flood Fill --------------------------------------------------------------------------------------
 

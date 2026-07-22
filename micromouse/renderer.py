@@ -1,7 +1,8 @@
 import pygame
+import time
 
-from . import config
-from . import maze
+import config
+import maze
 
 ### Renderer Class-----------------------------------------------------------------------------------
 
@@ -17,7 +18,7 @@ class Renderer:
         self.clock = pygame.time.Clock()        # display throttle
         pygame.display.set_caption("Micro-Mouse")
 
-    def draw(self, belief, mouse=None, path=None):
+    def draw(self, belief, mouse=None, path=None, done=None, animate=False):
         for event in pygame.event.get(): # Let the window be closed cleanly.
             if event.type == pygame.QUIT:
                 self.close()
@@ -32,12 +33,29 @@ class Renderer:
         for wall, corners in self.maze.h_walls.items():
             rect = self._rect_from_corners(corners)
             known = self.belief_state("H", wall, belief)
-            pygame.draw.rect(self.screen, (255,255,255) if known else (100,100,100), rect)
+            pygame.draw.rect(self.screen, (255,255,255) if known else (80,80,80), rect)
 
         for wall, corners in self.maze.v_walls.items():
             rect = self._rect_from_corners(corners)
             known = self.belief_state("V", wall, belief)
-            pygame.draw.rect(self.screen, (255,255,255) if known else (100,100,100), rect)
+            pygame.draw.rect(self.screen, (255,255,255) if known else (80,80,80), rect)
+
+
+        if done:
+            post_size = config.POST_SIDE_MM
+            cell_pitch = config.MM_PER_CELL
+            for step in done:
+                x, y = step
+                # Cell interior corners in mm (excluding the post corners)
+                bl = (x * cell_pitch + post_size, y * cell_pitch + post_size)
+                br = ((x + 1) * cell_pitch, y * cell_pitch + post_size)
+                tr = ((x + 1) * cell_pitch, (y + 1) * cell_pitch)
+                tl = (x * cell_pitch + post_size, (y + 1) * cell_pitch)
+                rect = self._rect_from_corners((bl, br, tr, tl))
+                pygame.draw.rect(self.screen, (0, 180, 160), rect) # Vibrant teal for done tiles
+            if animate:
+                time.sleep(0.025) # nice animation
+                pygame.display.flip()
 
         if path:
             post_size = config.POST_SIDE_MM
@@ -50,7 +68,10 @@ class Renderer:
                 tr = ((x + 1) * cell_pitch, (y + 1) * cell_pitch)
                 tl = (x * cell_pitch + post_size, (y + 1) * cell_pitch)
                 rect = self._rect_from_corners((bl, br, tr, tl))
-                pygame.draw.rect(self.screen, (0, 180, 160), rect) # Vibrant neon teal for path tiles
+                pygame.draw.rect(self.screen, (0, 90, 80), rect) # Faded teal for path tiles
+                if animate:
+                    time.sleep(0.05) # nice animation
+                    pygame.display.flip()
         
         pygame.display.flip()
         self.clock.tick(60) # also replace with config num

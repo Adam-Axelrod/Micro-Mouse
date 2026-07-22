@@ -1,6 +1,6 @@
 
-from . import config
-from . import maze
+import config
+import maze
 
 ### Explorer Class ----------------------------------------------------------------------------------
 

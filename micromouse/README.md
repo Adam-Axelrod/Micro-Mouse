@@ -1,51 +1,71 @@
-# README
+# UKMARS Gemini Micromouse Codebase
 
-Program for simulating and driving a Gemini maze mouse. Exploration with a flood fill algorithm & racing with a PPO based ML model.
+Autonomous navigation, flood-fill maze exploration, and speed-run execution software for the **UKMARS Gemini** micromouse platform (Raspberry Pi Pico 2 W running MicroPython).
 
-## Setup
+Designed so the **exact same code** runs on both PC simulation and Pico hardware.
 
-**Simulation**
+---
 
-1.
-2.
+## 1. Architecture & Design Principles
 
-**Pico W port**
+* **Zero Standard Library Dependencies**: Uses standard MicroPython modules (`os`, `time`, `math`, `machine`). No `pathlib` or desktop-only libraries are required on the Pico.
+* **Unified Hardware Abstraction (`setup.py`)**: Defines physical pin mappings, PWM channels, ADC sensor inputs, and button handles.
+  * **On Pico**: Loads MicroPython's native C `machine` module.
+  * **On PC**: Loads desktop mock `machine.py`, which integrates differential-drive physics and sensor raycasting.
+* **Discrete Belief vs. Continuous Geometry**:
+  * `MazeStructure` (`maze.py`): Lightweight grid representation `(x, y): (N, E, S, W)` used as the internal belief map on both PC and Pico.
+  * `MazeGeometry` (`geometry.py`): Continuous $mm$-space raycasting physics used **only on PC** for simulation.
 
-1. Copy over relevant files
+---
 
+## 2. Operation Modes (`main.py`)
 
-## Files
+When `main.py` runs, it selects the operation mode based on button input:
 
-### config.py
+1. **Exploration Mode (Left Button / `btn1` - Pin 20)**:
+   * Mouse explores the maze cell-by-cell using flood-fill (`search_algorithms.py`).
+   * Updates its `belief_map` upon sensing walls.
+   * Exports the discovered maze layout to `last_explored_belief.num` upon completion.
+2. **Speed Run Mode (Right Button / `Switch` - Pin 14)**:
+   * Loads the saved grid map (`last_explored_belief.num`) or `groundtruth.num`.
+   * Calculates the optimal shortest path using flood fill.
+   * Translates the path into egocentric verbs (`F n`, `L`, `R`, `U`, `H`) via `commands.py`.
+   * Drives the mouse through the movement sequence.
 
+---
 
-### maze.py
+## 3. Module Guide
 
-Classes for hosting the important features of the maze. Designed for easy and quick comparisons between ground truth and imagined representations of the maze.
-Handles construction of mazes from .num files and mirror exports.
+| File | Purpose |
+| :--- | :--- |
+| **`main.py`** | Top-level entry point. Handles button state checks, mode selection, and command execution. |
+| **`setup.py`** | Hardware pin definitions for motors, reflective sensors, and buttons. |
+| **`machine.py`** | Desktop mock MicroPython `machine` module (`Pin`, `PWM`, `ADC`) for PC simulation. |
+| **`config.py`** | Single source of truth for physical scale ($180\text{mm}$ cells, wheel diameter, track width), timing, and file paths. |
+| **`maze.py`** | `MazeStructure` class and `.num` file reader (`num_file_import`) / writer (`num_file_export`). |
+| **`geometry.py`** | 2D line segment calculations and `cast_ray()` engine for PC sensor simulation. |
+| **`mouse.py`** | `MouseState` continuous pose integration (differential-drive kinematics) and phototransistor ADC light-intensity model. |
+| **`explorer.py`** | Pure `Explorer` class that manages belief maps and steps between cells. |
+| **`search_algorithms.py`** | Pure flood-fill distance transform and greedy descent pathfinding. |
+| **`env_explorer.py`** | Exploration loop (`explore`) and grid loading/planning helper (`load_and_plan_route`). |
+| **`commands.py`** | Translates absolute cell routes into egocentric relative commands (`F n`, `L`, `R`, `U`, `H`). |
+| **`diagnostic_encoders.py`** | MicroPython PIO quadrature encoder counter class for hardware motor encoders. |
+| **`groundtruth.num`** | Default ground-truth maze fixture used by PC simulation. |
 
-#### class MazeStructure
+---
 
-Holds all the information needed for logical step based solving. Initialises an empty maze with a perimeter wall. Wall properties changed via a `mark_wall` call.
+## 4. How to Run
 
-- self.cells: {(x, y), (n, e, s, w)}
+### Running in PC Simulation
+Run `main.py` directly from the project directory:
+```bash
+python3 Micro-Mouse/micromouse/main.py
+```
+To run the automated physics and simulation test suite:
+```bash
+python3 Micro-Mouse/tests/test_physics_sim.py
+```
 
-	Dictionary of coordinate tuples (keys) against tuples of boolean values for wall presence (values).
-
-- self.cols: int
-
-- self.rows: int
-
-- self.goal: (x, y)
-
-#### class MazeGeometry
-
-Holds the mathematical information needed for collision calculations and rendering. Needed for simulations but not for driving the gemini platform.
-
-
-#### Tests:
-
-> python -m micromouse.maze
-
-
-### explorer.py
+### Running on Pico W Hardware
+1. Copy all files from `Micro-Mouse/micromouse/` to the Pico's root filesystem.
+2. MicroPython automatically executes `main.py` on power-up.
