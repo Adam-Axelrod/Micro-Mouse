@@ -36,7 +36,7 @@ Designed so the **exact same code** runs on both PC simulation and Pico hardware
 
 ## Directory Structure
 
-* **`micromouse/`**: The core package containing all portable source code and maze files.
+* **`Micro-Mouse/`**: The core package containing all portable source code and maze files.
   * `main.py`: Unified entry point with Left Button (Exploration) and Right Button (Speed Run) modes.
   * `setup.py`: Pin, PWM, and ADC hardware definitions.
   * `machine.py`: Mock MicroPython hardware module for PC simulation.
@@ -58,13 +58,13 @@ Designed so the **exact same code** runs on both PC simulation and Pico hardware
 
 ### Running in PC Simulation
 ```bash
-python3 Micro-Mouse/micromouse/main.py
+python3 main.py
 ```
 
 ### Running Automated Test Suite
 ```bash
-python3 Micro-Mouse/tests/test_physics_sim.py
+python3 tests/test_physics_sim.py
 ```
 
 ### Deployment to Pico W
-Copy all files inside `Micro-Mouse/micromouse/` to the root filesystem of the Pico 2 W.
+Copy all files inside `Micro-Mouse/` to the root filesystem of the Pico 2 W.
