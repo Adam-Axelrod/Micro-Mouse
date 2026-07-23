@@ -6,8 +6,10 @@ Identical code runs on Pico and PC:
 """
 try:
     from machine import Pin, ADC, PWM
+    IS_HARDWARE = True   # real MicroPython machine module (Pico)
 except ImportError:
     from sim_machine import Pin, ADC, PWM
+    IS_HARDWARE = False  # PC simulation mock
 
 # Motor PWM pins (2 PWM channels per motor; active low: 65535 = OFF, lower = faster)
 leftFwd = PWM(Pin(2))
@@ -38,7 +40,9 @@ centreSensorLED = Pin(19, Pin.OUT)  # Front wall detected LED
 rightSensorLED = Pin(18, Pin.OUT)   # Right wall detected LED
 leftMezzLED = Pin(12, Pin.OUT)      # Left Mezzanine LED D1
 rightMezzLED = Pin(13, Pin.OUT)     # Right Mezzanine LED D2
-LED_PIN = Pin("LED", Pin.OUT) if hasattr(Pin, "OUT") else Pin(25, Pin.OUT)
+# Onboard LED: the named "LED" pin on the Pico (W boards route it via the wireless
+# chip, so the name matters); plain numeric pin for the PC mock.
+LED_PIN = Pin("LED", Pin.OUT) if IS_HARDWARE else Pin(25, Pin.OUT)
 
 # Backward-compatibility aliases
 btn1 = leftButton

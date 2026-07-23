@@ -1,20 +1,64 @@
 """Continuous 2D geometry and raycasting engine for the micromouse simulation.
 
+PC-only: the Pico never needs this module (see agent-context architectural tree).
+It has real sensors returning true environment data directly; there is no
+continuous mm-space maze to derive or raycast against. `maze.py` (MazeStructure)
+is the only maze representation shared with the Pico.
+
 Operates strictly in world coordinates (millimeters) anchored to config.MM_PER_CELL.
-Computes wall line segments from a MazeStructure and calculates exact raycast hit
-distances for the reflective sensor simulation.
+Builds wall/post polygons and the joined collision/raycast boundary from a
+MazeStructure, and calculates exact raycast hit distances for the reflective
+sensor simulation.
 """
 
 import math
 import config
 
-class MazeGeometry: #render class
+
+def merge_intervals(intervals):
+    """Merge overlapping or touching (lo, hi) 1D intervals into maximal spans.
+
+    Pure interval-merge helper used to collapse a grid-line's wall intervals
+    and post stubs into the joined boundary segments.
+    """
+    if not intervals:
+        return []
+    ordered = sorted(intervals)
+    merged = [ordered[0]]
+    for lo, hi in ordered[1:]:
+        last_lo, last_hi = merged[-1]
+        if lo <= last_hi:
+            merged[-1] = (last_lo, max(last_hi, hi))
+        else:
+            merged.append((lo, hi))
+    return merged
+
+
+class MazeGeometry:  # render + collision class, PC-only
+    """Continuous mm-space geometry derived from a MazeStructure, built once at load.
+
+    Two layers:
+      1. Source polygons (posts, h_walls, v_walls) -- per-cell objects with
+         identity, used only for rendering.
+      2. Derived boundary segments (vertical_boundaries, horizontal_boundaries,
+         flattened into segments) -- the joined/merged centreline set shared by
+         collision and raycasting (MazeSegments objects). Static, not
+         recomputed per tick.
+
+    Centreline model: boundary segments sit on the grid-line itself
+    (x or y = k * MM_PER_CELL), not offset to the thick-wall faces. The ~6mm
+    simplification is deliberate -- it's under the sensor noise floor, and
+    collision is a terminal flag (no push-out), so exact faces aren't needed.
+    See agent-context/00_PROJECT_STORY.md section 12 for the full decision log.
+    """
+
     def __init__(self, structure):
-        self.structure = structure #MazeStructure object
+        self.structure = structure  # MazeStructure object
         self.posts = self.generate_post_polygons()
         self.h_walls, self.v_walls = self.generate_wall_polygons()
-        self.segments = self.generate_wall_segments()
-        
+        self.vertical_boundaries, self.horizontal_boundaries = self.generate_boundary_segments()
+        self.segments = self.build_wall_segments()
+
     def generate_post_polygons(self):
         post_size = config.POST_SIDE_MM
         cell_pitch = config.MM_PER_CELL
@@ -32,6 +76,9 @@ class MazeGeometry: #render class
         return posts
 
     def generate_wall_polygons(self):
+        """Per-cell wall face polygons (BL, BR, TR, TL), offset inward from the
+        lattice by post_size so they sit flush against the post squares.
+        Source layer -- rendering only, not the collision boundary."""
         post_size = config.POST_SIDE_MM
         cell_pitch = config.MM_PER_CELL
         cells = self.structure.cells
@@ -44,9 +91,11 @@ class MazeGeometry: #render class
                 present = (cell_above and cell_above[config.WALL_INDEX["s"]]) or (cell_below and cell_below[config.WALL_INDEX["n"]])
                 if present:
                     left = span_col * cell_pitch + post_size
+                    right = (span_col + 1) * cell_pitch
                     bottom = line_row * cell_pitch
+                    top = bottom + post_size
                     h_walls[(span_col, line_row)] = (
-                        (left, bottom), (span_col + 1) * cell_pitch, bottom + post_size
+                        (left, bottom), (right, bottom), (right, top), (left, top)
                     )
 
         for line_col in range(self.structure.cols + 1):
@@ -56,12 +105,72 @@ class MazeGeometry: #render class
                 present = (cell_right and cell_right[config.WALL_INDEX["w"]]) or (cell_left and cell_left[config.WALL_INDEX["e"]])
                 if present:
                     left = line_col * cell_pitch
+                    right = left + post_size
                     bottom = span_row * cell_pitch + post_size
+                    top = (span_row + 1) * cell_pitch
                     v_walls[(line_col, span_row)] = (
-                        left, bottom, left + post_size, (span_row + 1) * cell_pitch
+                        (left, bottom), (right, bottom), (right, top), (left, top)
                     )
-    def generate_wall_segments(self):
-        return build_wall_segments(self.structure)
+
+        return h_walls, v_walls
+
+    def generate_boundary_segments(self):
+        """Derived boundary set (layer 2): treat each grid-line as a 1D number
+        line, drop the wall intervals and post stubs onto it, then merge into
+        maximal segments.
+
+        Vertical boundaries live on column grid-lines (x = line_col * cell_pitch);
+        horizontal boundaries live on row grid-lines (y = line_row * cell_pitch).
+        Each present wall contributes a full-cell interval; every lattice point
+        on the line contributes a small +/-post_size/2 stub (posts are always
+        present per UK MARS rules). A run of connected walls collapses to one
+        long segment; a post with no wall on this plane survives as an isolated
+        stub -- it's still held in the maze by a wall on the perpendicular plane.
+        """
+        cell_pitch = config.MM_PER_CELL
+        post_size = config.POST_SIDE_MM
+        half_post = post_size / 2.0
+        cells = self.structure.cells
+
+        vertical_boundaries = []
+        for line_col in range(self.structure.cols + 1):
+            x = line_col * cell_pitch
+            intervals = []
+            for span_row in range(self.structure.rows):
+                cell_right = cells.get((line_col, span_row))
+                cell_left = cells.get((line_col - 1, span_row))
+                present = (cell_right and cell_right[config.WALL_INDEX["w"]]) or (cell_left and cell_left[config.WALL_INDEX["e"]])
+                if present:
+                    intervals.append((span_row * cell_pitch, (span_row + 1) * cell_pitch))
+            for post_row in range(self.structure.rows + 1):
+                centre = post_row * cell_pitch
+                intervals.append((centre - half_post, centre + half_post))
+            for lo, hi in merge_intervals(intervals):
+                vertical_boundaries.append(MazeSegments(x, lo, x, hi))
+
+        horizontal_boundaries = []
+        for line_row in range(self.structure.rows + 1):
+            y = line_row * cell_pitch
+            intervals = []
+            for span_col in range(self.structure.cols):
+                cell_above = cells.get((span_col, line_row))
+                cell_below = cells.get((span_col, line_row - 1))
+                present = (cell_above and cell_above[config.WALL_INDEX["s"]]) or (cell_below and cell_below[config.WALL_INDEX["n"]])
+                if present:
+                    intervals.append((span_col * cell_pitch, (span_col + 1) * cell_pitch))
+            for post_col in range(self.structure.cols + 1):
+                centre = post_col * cell_pitch
+                intervals.append((centre - half_post, centre + half_post))
+            for lo, hi in merge_intervals(intervals):
+                horizontal_boundaries.append(MazeSegments(lo, y, hi, y))
+
+        return vertical_boundaries, horizontal_boundaries
+
+    def build_wall_segments(self):
+        """Flatten the two merged boundary families into one list, in mm world
+        coordinates, for raycasting (cast_ray) and collision. Static -- built
+        once in __init__, not recomputed per tick."""
+        return self.vertical_boundaries + self.horizontal_boundaries
 
 
 class MazeSegments:
@@ -81,38 +190,6 @@ class MazeSegments:
 
 
 Segment = MazeSegments
-
-
-def build_wall_segments(maze): #uses MazeGeometry walls & posts - links them together to create vert and horizontal segments
-    """Convert a MazeStructure into a deduplicated list of 2D line segments in mm space."""
-    cell_size_mm = config.MM_PER_CELL
-    raw_segments = set()
-
-    for (column, row), walls in maze.cells.items():
-        cell_min_x = column * cell_size_mm
-        cell_max_x = (column + 1) * cell_size_mm
-        cell_min_y = row * cell_size_mm
-        cell_max_y = (row + 1) * cell_size_mm
-
-        # walls: (north, east, south, west)
-        north_wall, east_wall, south_wall, west_wall = walls
-        if north_wall:
-            segment = MazeSegments(cell_min_x, cell_max_y, cell_max_x, cell_max_y)
-            raw_segments.add(segment.tuple_repr())
-        if east_wall:
-            segment = MazeSegments(cell_max_x, cell_min_y, cell_max_x, cell_max_y)
-            raw_segments.add(segment.tuple_repr())
-        if south_wall:
-            segment = MazeSegments(cell_min_x, cell_min_y, cell_max_x, cell_min_y)
-            raw_segments.add(segment.tuple_repr())
-        if west_wall:
-            segment = MazeSegments(cell_min_x, cell_min_y, cell_min_x, cell_max_y)
-            raw_segments.add(segment.tuple_repr())
-
-    segment_list = []
-    for point1, point2 in sorted(raw_segments):
-        segment_list.append(MazeSegments(point1[0], point1[1], point2[0], point2[1]))
-    return segment_list
 
 
 ### this provides the information to the simulated pin to fabricate a light intensity

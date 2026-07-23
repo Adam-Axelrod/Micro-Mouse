@@ -38,6 +38,10 @@ WHEEL_AXIS_TO_FRONT_MM = BODY_LENGTH_MM - WHEEL_AXIS_TO_BACK_MM
 ENCODER_COUNTS_PER_WHEEL_REV = 1400
 MM_PER_TICK = WHEEL_CIRCUMFERENCE_MM / ENCODER_COUNTS_PER_WHEEL_REV
 
+# Motor limits (SIM-3): wheel ground speed at 100% duty. Provisional until measured;
+# N20 no-load ceiling is ~1000 mm/s (~600 rpm x wheel circumference), capped lower.
+MAX_WHEEL_SPEED_MMS = 600.0
+
 # Render-only pixel scale
 PX_PER_MM = 0.25
 TILE_PX = MM_PER_CELL * PX_PER_MM

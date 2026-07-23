@@ -3,7 +3,6 @@
 from collections import deque
 
 import config
-import maze
 import explorer
 
 ### Flood Fill --------------------------------------------------------------------------------------
@@ -83,6 +82,13 @@ def flood_fill(maze, position, destination=None):
 ### Hug Left ----------------------------------------------------------------------------------------
 
 def hug_left(maze, position, destination=None):
+    """Intentionally unimplemented stub (no call sites yet) -- not a bug.
+
+    Planned: left-hand wall-follower as a simple non-flood baseline/fallback --
+    from `position`, keep the left hand on the wall until `destination` is
+    reached. Signature mirrors flood_fill so it can slot in as an alternative
+    planner when implemented.
+    """
     pass
 
 ### Tests -------------------------------------------------------------------------------------------

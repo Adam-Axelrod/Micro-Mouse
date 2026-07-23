@@ -3,6 +3,7 @@ import time
 
 import config
 import maze
+import geometry
 
 ### Renderer Class-----------------------------------------------------------------------------------
 
@@ -110,7 +111,7 @@ class Renderer:
 
 if __name__ == "__main__":
     maze_struct = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE)) # gen maze struct from file
-    maze_actual = maze.MazeGeometry(maze_struct) # init obstacle features
+    maze_actual = geometry.MazeGeometry(maze_struct) # init obstacle features
     render = Renderer(maze_actual) # provide ground truth for renderer
     empty = maze.MazeStructure() # empty belief to compare it to
     while True: # continuously feed in empty belief - should always have an aligned perimeter wall with faded interior walls

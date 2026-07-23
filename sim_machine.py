@@ -8,7 +8,7 @@ simulated phototransistor light intensity values via raycasting.
 
 import math
 import config
-from geometry import build_wall_segments
+from geometry import MazeGeometry
 from maze import MazeStructure
 from mouse import MouseState
 
@@ -22,7 +22,7 @@ class HardwareSimulation:
         self.left_rev_duty = 65535
         self.right_fwd_duty = 65535
         self.right_rev_duty = 65535
-        self.max_wheel_speed_mms = 600.0  # mm/s at 100% duty
+        self.max_wheel_speed_mms = config.MAX_WHEEL_SPEED_MMS  # mm/s at 100% duty
 
         self.adc_pin_map = {
             28: "left",
@@ -33,7 +33,7 @@ class HardwareSimulation:
 
     def load_maze(self, maze_instance):
         self.maze = maze_instance
-        self.segments = build_wall_segments(maze_instance)
+        self.segments = MazeGeometry(maze_instance).segments
 
     def set_motor_duty(self, pin_id, duty):
         if pin_id == 2:

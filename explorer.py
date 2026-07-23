@@ -9,7 +9,7 @@ Doesn't know its pixel/mm position but knows what step it is meant to be underta
 """pos - mouse is here or should be here, next_pos next waypoint"""
 
 class Explorer:
-    def __init__(self, belief_map=None, destination=None, pos=None, render=True):
+    def __init__(self, belief_map=None, destination=None, pos=None):
         self.belief_map = belief_map if belief_map else maze.MazeStructure()
         self.destination = destination if destination else self.belief_map.goal
         self.pos = pos if pos else (0,0)

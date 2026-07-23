@@ -4,7 +4,6 @@ Unified control loop running on both Raspberry Pi Pico 2 W and PC simulation.
 Supports headless execution as well as optional Pygame desktop rendering (`python3 main.py --render`).
 """
 
-import math
 import os
 import sys
 import time
@@ -21,8 +20,10 @@ import search_algorithms
 import setup
 from explorer import Explorer
 
-# Optional Pygame desktop renderer (PC only)
+# Optional Pygame desktop renderer (PC only; geometry is PC-only too, so it
+# lives under the same guard rather than at top level, keeping main.py Pico-safe)
 try:
+    import geometry
     from renderer import Renderer
     HAS_PYGAME = True
 except ImportError:
@@ -164,8 +165,9 @@ def run_exploration_mode(enable_render=False, save_belief_path=None):
     render_object = None
     if HAS_PYGAME and enable_render:
         try:
-            render_object = Renderer(maze.MazeGeometry(real_maze))
-        except Exception:
+            render_object = Renderer(geometry.MazeGeometry(real_maze))
+        except Exception as exc:
+            print(f"Renderer init failed ({type(exc).__name__}: {exc}); continuing without rendering.")
             render_object = None
 
     previous_route = None
