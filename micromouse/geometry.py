@@ -8,6 +8,60 @@ distances for the reflective sensor simulation.
 import math
 import config
 
+class MazeGeometry:
+    def __init__(self, structure):
+        self.structure = structure #MazeStructure object
+        self.posts = self.generate_post_polygons()
+        self.h_walls, self.v_walls = self.generate_wall_polygons()
+        
+    def generate_post_polygons(self):
+        post_size = config.POST_SIDE_MM
+        cell_pitch = config.MM_PER_CELL
+        posts = {}
+        for post_col in range(self.structure.cols + 1):
+            for post_row in range(self.structure.rows + 1):
+                left = post_col * cell_pitch
+                bottom = post_row * cell_pitch
+                posts[(post_col, post_row)] = (
+                    (left, bottom),
+                    (left + post_size, bottom),
+                    (left + post_size, bottom + post_size),
+                    (left, bottom + post_size),
+                )
+        return posts
+
+    def generate_wall_polygons(self):
+        post_size = config.POST_SIDE_MM
+        cell_pitch = config.MM_PER_CELL
+        cells = self.structure.cells
+        h_walls, v_walls = {}, {}
+
+        for span_col in range(self.structure.cols):
+            for line_row in range(self.structure.rows + 1):
+                cell_above = cells.get((span_col, line_row))
+                cell_below = cells.get((span_col, line_row - 1))
+                present = (cell_above and cell_above[config.WALL_INDEX["s"]]) or (cell_below and cell_below[config.WALL_INDEX["n"]])
+                if present:
+                    left = span_col * cell_pitch + post_size
+                    bottom = line_row * cell_pitch
+                    h_walls[(span_col, line_row)] = (
+                        (left, bottom), (span_col + 1) * cell_pitch, bottom + post_size
+                    )
+
+        for line_col in range(self.structure.cols + 1):
+            for span_row in range(self.structure.rows):
+                cell_right = cells.get((line_col, span_row))
+                cell_left = cells.get((line_col - 1, span_row))
+                present = (cell_right and cell_right[config.WALL_INDEX["w"]]) or (cell_left and cell_left[config.WALL_INDEX["e"]])
+                if present:
+                    left = line_col * cell_pitch
+                    bottom = span_row * cell_pitch + post_size
+                    v_walls[(line_col, span_row)] = (
+                        left, bottom, left + post_size, (span_row + 1) * cell_pitch
+                    )
+        return h_walls, v_walls
+
+
 
 class Segment:
     def __init__(self, start_x, start_y, end_x, end_y):

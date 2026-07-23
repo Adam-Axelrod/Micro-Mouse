@@ -59,11 +59,11 @@ When `main.py` runs, it selects the operation mode based on button input:
 ### Running in PC Simulation
 Run `main.py` directly from the project directory:
 ```bash
-python3 Micro-Mouse/micromouse/main.py
+python3 micromouse/main.py
 ```
 To run the automated physics and simulation test suite:
 ```bash
-python3 Micro-Mouse/tests/test_physics_sim.py
+python3 tests/test_physics_sim.py
 ```
 
 ### Running on Pico W Hardware

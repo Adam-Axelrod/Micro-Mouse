@@ -6,7 +6,7 @@ PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Default maze files (treats PACKAGE_DIR as root for MicroPython compatibility)
 DEFAULT_MAZE = os.path.join(PACKAGE_DIR, "groundtruth.num")
-SAVED_BELIEF_MAZE = os.path.join(PACKAGE_DIR, "last_explored_belief.num")
+SAVED_BELIEF_MAZE = os.path.join(PACKAGE_DIR, "belief.num")
 
 # Compass & grid conventions (North, East, South, West)
 DIRECTIONS = ("n", "e", "s", "w")

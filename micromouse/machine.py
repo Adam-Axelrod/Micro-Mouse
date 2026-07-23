@@ -67,10 +67,7 @@ def get_mouse_state():
 def step_sim_physics(delta_time_seconds=0.01):
     simulation_engine.step_physics(delta_time_seconds)
 
-
-# ======================================================================================
-# Mock MicroPython machine classes
-# ======================================================================================
+### Mock MicroPython machine classes ----------------------------------------------------------------
 
 class Pin:
     IN = 0
