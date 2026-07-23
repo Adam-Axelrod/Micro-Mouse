@@ -44,7 +44,7 @@ class MouseState:
             turn_radius = linear_velocity / angular_velocity
             new_heading = self.heading_radians + angular_velocity * delta_time_seconds
             self.x_mm += turn_radius * (math.sin(new_heading) - math.sin(self.heading_radians))
-            self.y_mm -= turn_radius * (math.cos(new_heading) - math.cos(self.heading_radians))
+            self.y_mm += turn_radius * (math.cos(new_heading) - math.cos(self.heading_radians))
             self.heading_radians = new_heading
 
         # Keep heading within [0, 2*pi)

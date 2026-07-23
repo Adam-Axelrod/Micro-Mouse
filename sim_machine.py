@@ -18,15 +18,17 @@ class HardwareSimulation:
         self.mouse = MouseState()
         self.maze = None
         self.segments = []
-        self.left_motor_duty = 65535  # Active-low default (OFF)
-        self.right_motor_duty = 65535
+        self.left_fwd_duty = 65535   # Active-low default (OFF)
+        self.left_rev_duty = 65535
+        self.right_fwd_duty = 65535
+        self.right_rev_duty = 65535
         self.max_wheel_speed_mms = 600.0  # mm/s at 100% duty
 
         self.adc_pin_map = {
-            29: "left",
-            28: "front",
+            28: "left",
             27: "front",
             26: "right",
+            29: "left",  # fallback
         }
 
     def load_maze(self, maze_instance):
@@ -34,18 +36,23 @@ class HardwareSimulation:
         self.segments = build_wall_segments(maze_instance)
 
     def set_motor_duty(self, pin_id, duty):
-        if pin_id in (9, 3, 2, 7):
-            self.left_motor_duty = duty
-        elif pin_id in (17, 4, 5, 8):
-            self.right_motor_duty = duty
+        if pin_id == 2:
+            self.left_fwd_duty = duty
+        elif pin_id in (3, 9, 7):
+            self.left_rev_duty = duty
+        elif pin_id == 4:
+            self.right_fwd_duty = duty
+        elif pin_id in (5, 17, 8):
+            self.right_rev_duty = duty
 
-    def duty_to_speed(self, duty):
-        power_fraction = (65535 - duty) / 65535.0
-        return power_fraction * self.max_wheel_speed_mms
+    def compute_wheel_speeds(self):
+        # Gemini active-low PWM drive: (fwd_power - rev_power)
+        left_power = ((65535.0 - self.left_fwd_duty) - (65535.0 - self.left_rev_duty)) / 65535.0
+        right_power = ((65535.0 - self.right_fwd_duty) - (65535.0 - self.right_rev_duty)) / 65535.0
+        return left_power * self.max_wheel_speed_mms, right_power * self.max_wheel_speed_mms
 
     def step_physics(self, delta_time_seconds):
-        left_speed = self.duty_to_speed(self.left_motor_duty)
-        right_speed = self.duty_to_speed(self.right_motor_duty)
+        left_speed, right_speed = self.compute_wheel_speeds()
         self.mouse.step(left_speed, right_speed, delta_time_seconds)
 
     def read_adc(self, pin_id):

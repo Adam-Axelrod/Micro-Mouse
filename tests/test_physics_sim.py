@@ -2,16 +2,17 @@ import math
 import os
 import sys
 
-# Add micromouse package to sys.path
+# Add Micro-Mouse package directory to sys.path
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
-PACKAGE_DIR = os.path.abspath(os.path.join(TESTS_DIR, "..", "micromouse"))
-sys.path.insert(0, PACKAGE_DIR)
+PACKAGE_DIR = os.path.dirname(TESTS_DIR)
+if PACKAGE_DIR not in sys.path:
+    sys.path.insert(0, PACKAGE_DIR)
 
 import config
 from geometry import Segment, build_wall_segments, cast_ray
 from maze import MazeStructure, num_file_import
 from mouse import MouseState
-from machine import set_sim_maze, step_sim_physics, get_mouse_state
+from sim_machine import set_sim_maze, step_sim_physics, get_mouse_state
 
 
 def test_kinematics_straight():

@@ -1,3 +1,5 @@
+# little test module for vscode connection
+
 from machine import Pin
 from utime import sleep
 

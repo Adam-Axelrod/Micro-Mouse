@@ -8,11 +8,12 @@ distances for the reflective sensor simulation.
 import math
 import config
 
-class MazeGeometry:
+class MazeGeometry: #render class
     def __init__(self, structure):
         self.structure = structure #MazeStructure object
         self.posts = self.generate_post_polygons()
         self.h_walls, self.v_walls = self.generate_wall_polygons()
+        self.segments = self.generate_wall_segments()
         
     def generate_post_polygons(self):
         post_size = config.POST_SIDE_MM
@@ -59,11 +60,11 @@ class MazeGeometry:
                     v_walls[(line_col, span_row)] = (
                         left, bottom, left + post_size, (span_row + 1) * cell_pitch
                     )
-        return h_walls, v_walls
+    def generate_wall_segments(self):
+        return build_wall_segments(self.structure)
 
 
-
-class Segment:
+class MazeSegments:
     def __init__(self, start_x, start_y, end_x, end_y):
         self.x1 = start_x
         self.y1 = start_y
@@ -79,7 +80,10 @@ class Segment:
             return (point2, point1)
 
 
-def build_wall_segments(maze):
+Segment = MazeSegments
+
+
+def build_wall_segments(maze): #uses MazeGeometry walls & posts - links them together to create vert and horizontal segments
     """Convert a MazeStructure into a deduplicated list of 2D line segments in mm space."""
     cell_size_mm = config.MM_PER_CELL
     raw_segments = set()
@@ -93,25 +97,27 @@ def build_wall_segments(maze):
         # walls: (north, east, south, west)
         north_wall, east_wall, south_wall, west_wall = walls
         if north_wall:
-            segment = Segment(cell_min_x, cell_max_y, cell_max_x, cell_max_y)
+            segment = MazeSegments(cell_min_x, cell_max_y, cell_max_x, cell_max_y)
             raw_segments.add(segment.tuple_repr())
         if east_wall:
-            segment = Segment(cell_max_x, cell_min_y, cell_max_x, cell_max_y)
+            segment = MazeSegments(cell_max_x, cell_min_y, cell_max_x, cell_max_y)
             raw_segments.add(segment.tuple_repr())
         if south_wall:
-            segment = Segment(cell_min_x, cell_min_y, cell_max_x, cell_min_y)
+            segment = MazeSegments(cell_min_x, cell_min_y, cell_max_x, cell_min_y)
             raw_segments.add(segment.tuple_repr())
         if west_wall:
-            segment = Segment(cell_min_x, cell_min_y, cell_min_x, cell_max_y)
+            segment = MazeSegments(cell_min_x, cell_min_y, cell_min_x, cell_max_y)
             raw_segments.add(segment.tuple_repr())
 
     segment_list = []
     for point1, point2 in sorted(raw_segments):
-        segment_list.append(Segment(point1[0], point1[1], point2[0], point2[1]))
+        segment_list.append(MazeSegments(point1[0], point1[1], point2[0], point2[1]))
     return segment_list
 
 
-def cast_ray(ray_origin, ray_angle_radians, wall_segments, max_range_mm=300.0):
+### this provides the information to the simulated pin to fabricate a light intensity
+### the neural net will in effect be doing this in its hidden layers should we provide the sensors as input
+def cast_ray(ray_origin, ray_angle_radians, wall_segments, max_range_mm=300.0): # not a fan of the name ray cast, this is just calculating trig distances
     """Cast a 2D ray from ray_origin=(x, y) at ray_angle_radians.
 
     Returns the distance (in mm) to the nearest segment intersection, capped at max_range_mm.

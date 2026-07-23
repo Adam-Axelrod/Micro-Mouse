@@ -2,37 +2,51 @@
 
 Identical code runs on Pico and PC:
 - On Pico, MicroPython loads its native C machine module.
-- On PC, Python imports the mock machine.py module.
+- On PC, Python imports the mock sim_machine.py module.
 """
+try:
+    from machine import Pin, ADC, PWM
+except ImportError:
+    from sim_machine import Pin, ADC, PWM
 
-from machine import Pin, ADC, PWM
+# Motor PWM pins (2 PWM channels per motor; active low: 65535 = OFF, lower = faster)
+leftFwd = PWM(Pin(2))
+leftRev = PWM(Pin(3))
+rightFwd = PWM(Pin(4))
+rightRev = PWM(Pin(5))
 
-# Digital output pins
-LED_PIN = Pin(18, Pin.OUT)
-RMOTOR_DIR = Pin(8, Pin.OUT)
-LMOTOR_DIR = Pin(7, Pin.OUT)
-PIEZO_PIN = Pin(22, Pin.OUT)
-SENSOR1_PIN = Pin(19, Pin.OUT)
-SENSOR2_PIN = Pin(6, Pin.OUT)
-TRIGGER_PIN = Pin(16, Pin.OUT)
+for pwm_chan in (leftFwd, leftRev, rightFwd, rightRev):
+    pwm_chan.freq(2000)
+    pwm_chan.duty_u16(65535)  # Default OFF (active-low brake)
 
-# Motor PWM pins (active low: 65535 = OFF, lower = faster)
-LMOTOR_PIN = Pin(9, Pin.OUT)
-RMOTOR_PIN = Pin(17, Pin.OUT)
-LMOTOR_PWM = PWM(LMOTOR_PIN)
-RMOTOR_PWM = PWM(RMOTOR_PIN)
+# Tactile Buttons / Mode Switches (SW1 / SW2)
+leftButton = Pin(15, Pin.IN, Pin.PULL_UP)   # SW1: Left button (Exploration)
+rightButton = Pin(14, Pin.IN, Pin.PULL_UP)  # SW2: Right button (Speed Run)
 
-LMOTOR_PWM.freq(2000)
-RMOTOR_PWM.freq(2000)
-LMOTOR_PWM.duty_u16(65535)  # Default OFF
-RMOTOR_PWM.duty_u16(65535)  # Default OFF
+# Reflective sensor ADC inputs (phototransistors)
+leftSensor = ADC(28)   # Left wall sensor
+frontSensor = ADC(27)  # Front wall sensor
+rightSensor = ADC(26)  # Right wall sensor
 
-# Reflective sensor ADC inputs
-Lsidesense = ADC(Pin(29))   # Left side sensor
-Lfrontsense = ADC(Pin(28))  # Front sensor
-Rfrontsense = ADC(Pin(27))  # Front sensor
-Rsidesense = ADC(Pin(26))   # Right side sensor
+# Emitter Triggers
+sidesEmitter = Pin(22, Pin.OUT)  # Side IR illumination LEDs
+frontEmitter = Pin(21, Pin.OUT)  # Front IR illumination LED
 
-# Buttons / Switches
-btn1 = Pin(20, Pin.IN, Pin.PULL_UP)
-Switch = Pin(14, Pin.IN, Pin.PULL_UP)
+# Indicator & Status LEDs
+leftSensorLED = Pin(20, Pin.OUT)    # Left wall detected LED
+centreSensorLED = Pin(19, Pin.OUT)  # Front wall detected LED
+rightSensorLED = Pin(18, Pin.OUT)   # Right wall detected LED
+leftMezzLED = Pin(12, Pin.OUT)      # Left Mezzanine LED D1
+rightMezzLED = Pin(13, Pin.OUT)     # Right Mezzanine LED D2
+LED_PIN = Pin("LED", Pin.OUT) if hasattr(Pin, "OUT") else Pin(25, Pin.OUT)
+
+# Backward-compatibility aliases
+btn1 = leftButton
+Switch = rightButton
+Lsidesense = leftSensor
+Lfrontsense = frontSensor
+Rfrontsense = frontSensor
+Rsidesense = rightSensor
+LMOTOR_PWM = leftFwd
+RMOTOR_PWM = rightFwd
+

@@ -1,3 +1,9 @@
+"""Main Entry Point for UKMARS Gemini Micromouse.
+
+Unified control loop running on both Raspberry Pi Pico 2 W and PC simulation.
+Supports headless execution as well as optional Pygame desktop rendering (`python3 main.py --render`).
+"""
+
 import math
 import os
 import sys
@@ -8,10 +14,26 @@ PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
+import commands
 import config
+import maze
+import search_algorithms
 import setup
-from env_explorer import explore, load_and_plan_route
-from maze import MazeStructure, num_file_import
+from explorer import Explorer
+
+# Optional Pygame desktop renderer (PC only)
+try:
+    from renderer import Renderer
+    HAS_PYGAME = True
+except ImportError:
+    HAS_PYGAME = False
+
+# PC Hardware simulation engine (PC only)
+try:
+    import sim_machine
+    HAS_SIM = True
+except ImportError:
+    HAS_SIM = False
 
 CRUISE_DUTY_POWER = 0.55
 TURN_DUTY_POWER = 0.40
@@ -26,16 +48,45 @@ def blink_led(times, on_duration_ms=100, off_duration_ms=100):
 
 
 def drive_motors(left_power, right_power):
-    """Active-low driver: power in [-1.0, 1.0], duty_u16 65535 is OFF, 0 is FULL."""
-    left_duty = int(65535 * (1.0 - max(0.0, min(1.0, left_power))))
-    right_duty = int(65535 * (1.0 - max(0.0, min(1.0, right_power))))
-    setup.LMOTOR_PWM.duty_u16(left_duty)
-    setup.RMOTOR_PWM.duty_u16(right_duty)
+    """Active-low driver for dual PWM channels per motor: power in [-1.0, 1.0].
+    
+    65535 is OFF/HIGH, 0 is FULL LOW. Brake by setting both channels to 65535.
+    """
+    left_p = max(-1.0, min(1.0, left_power))
+    right_p = max(-1.0, min(1.0, right_power))
+
+    maxspeed = 65535
+    if left_p >= 0:
+        setup.leftFwd.duty_u16(maxspeed)
+        setup.leftRev.duty_u16(int(maxspeed * (1.0 - left_p)))
+    else:
+        setup.leftRev.duty_u16(maxspeed)
+        setup.leftFwd.duty_u16(int(maxspeed * (1.0 - abs(left_p))))
+
+    if right_p >= 0:
+        setup.rightFwd.duty_u16(maxspeed)
+        setup.rightRev.duty_u16(int(maxspeed * (1.0 - right_p)))
+    else:
+        setup.rightRev.duty_u16(maxspeed)
+        setup.rightFwd.duty_u16(int(maxspeed * (1.0 - abs(right_p))))
 
 
 def stop_motors():
-    setup.LMOTOR_PWM.duty_u16(65535)
-    setup.RMOTOR_PWM.duty_u16(65535)
+    maxspeed = 65535
+    setup.leftFwd.duty_u16(maxspeed)
+    setup.leftRev.duty_u16(maxspeed)
+    setup.rightFwd.duty_u16(maxspeed)
+    setup.rightRev.duty_u16(maxspeed)
+
+
+def read_walls(real_maze, current_position):
+    """Read true wall presence around current cell (simulation mode)."""
+    walls = real_maze.cells[current_position]
+    sensed_walls = []
+    for wall_flag, compass_side in zip(walls, config.DIRECTIONS):
+        if wall_flag:
+            sensed_walls.append(compass_side)
+    return sensed_walls
 
 
 def execute_movement_commands(movement_commands):
@@ -80,13 +131,78 @@ def execute_movement_commands(movement_commands):
         time.sleep(0.1)
 
 
-def run_exploration_mode():
+def load_and_plan_route(belief_file_path=None, start_heading=config.DIRECTIONS[0]):
+    """Load saved grid belief map, flood fill shortest route, and return movement commands."""
+    if belief_file_path is None:
+        belief_file_path = config.SAVED_BELIEF_MAZE
+
+    if not os.path.exists(belief_file_path):
+        print(f"Warning: No saved belief at {belief_file_path}, using ground truth maze.")
+        belief_file_path = config.DEFAULT_MAZE
+
+    cells, cols, rows = maze.num_file_import(belief_file_path)
+    discovered_maze = maze.MazeStructure(cells=cells, cols=cols, rows=rows)
+
+    optimal_route = search_algorithms.flood_fill(discovered_maze, config.START_POS)
+    movement_commands = commands.path_to_commands(optimal_route, start_heading=start_heading)
+
+    return optimal_route, movement_commands
+
+
+def run_exploration_mode(enable_render=False, save_belief_path=None):
     print("=== STARTING EXPLORATION MODE ===")
     blink_led(3, on_duration_ms=150, off_duration_ms=150)
 
-    real_maze = MazeStructure(*num_file_import(config.DEFAULT_MAZE))
-    explore(real_maze)
-    print("Exploration finished and grid map saved.")
+    real_maze = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE))
+    
+    if HAS_SIM:
+        sim_machine.set_sim_maze(real_maze)
+
+    belief = maze.MazeStructure(cols=real_maze.cols, rows=real_maze.rows)
+    explorer_robot = Explorer(belief_map=belief)
+
+    render_object = None
+    if HAS_PYGAME and enable_render:
+        try:
+            render_object = Renderer(maze.MazeGeometry(real_maze))
+        except Exception:
+            render_object = None
+
+    previous_route = None
+
+    while not explorer_robot.at_goal():
+        sensed_walls = read_walls(real_maze, explorer_robot.pos)
+        explorer_robot.observe(explorer_robot.pos, sensed_walls)
+        route = search_algorithms.flood_fill(explorer_robot.belief_map, explorer_robot.pos)
+
+        replanned = (previous_route is None or route != previous_route[1:])
+        if render_object is not None:
+            mouse_st = sim_machine.get_mouse_state() if HAS_SIM else None
+            render_object.draw(
+                belief=explorer_robot.belief_map,
+                mouse=mouse_st,
+                path=route,
+                done=explorer_robot.path_done,
+                animate=replanned
+            )
+        previous_route = route
+
+        if len(route) < 2:
+            break
+
+        explorer_robot.path_to_execute = [route[1]]
+        while explorer_robot.path_to_execute:
+            explorer_robot.step()
+            if HAS_SIM:
+                sim_machine.step_sim_physics(delta_time_seconds=0.01)
+
+    if save_belief_path is None:
+        save_belief_path = config.SAVED_BELIEF_MAZE
+
+    maze.num_file_export(save_belief_path, explorer_robot.belief_map.cells)
+    print(f"Exploration finished! Grid belief map saved to: {save_belief_path}")
+
+    return explorer_robot
 
 
 def run_speed_run_mode():
@@ -101,20 +217,25 @@ def run_speed_run_mode():
 
 def main():
     stop_motors()
+
+    enable_render = "--render" in sys.argv or "-r" in sys.argv
+
     print("Maze Mouse Ready. Press LEFT button for Exploration, RIGHT button for Speed Run.")
+    if enable_render:
+        print("[Rendering Enabled via CLI argument]")
 
     blink_led(2, on_duration_ms=200, off_duration_ms=200)
 
-    left_button_pressed = (setup.btn1.value() == 0)
-    right_button_pressed = (setup.Switch.value() == 0)
+    left_button_pressed = (setup.leftButton.value() == 0)
+    right_button_pressed = (setup.rightButton.value() == 0)
 
     if left_button_pressed:
-        run_exploration_mode()
+        run_exploration_mode(enable_render=enable_render)
     elif right_button_pressed:
         run_speed_run_mode()
     else:
-        print("No button pressed. Defaulting to Speed Run mode.")
-        run_speed_run_mode()
+        print("No button pressed. Defaulting to Exploration mode.")
+        run_exploration_mode(enable_render=enable_render)
 
 
 if __name__ == "__main__":
