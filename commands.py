@@ -1,4 +1,3 @@
-import os
 import config
 
 # Kept tiny and egocentric: F carries cell count; turns take no arguments

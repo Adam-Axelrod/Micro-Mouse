@@ -4,16 +4,22 @@ Identical code runs on Pico and PC:
 - On Pico, MicroPython loads its native C machine module.
 - On PC, Python imports the mock sim_machine.py module.
 """
+# The platform probe and the sim import happen HERE and only here: setup.py is
+# the hardware boundary. On PC, `sim` exposes the simulation engine (world
+# loading, physics stepping, true pose); on the Pico it is None and the pin
+# objects below are the real thing.
 try:
     from machine import Pin, ADC, PWM
     IS_HARDWARE = True   # real MicroPython machine module (Pico)
+    sim = None           # no simulation engine on hardware
 except ImportError:
+    import sim_machine as sim
     from sim_machine import Pin, ADC, PWM
-    IS_HARDWARE = False  # PC simulation mock
+    IS_HARDWARE = False  # PC: the sim engine stands in for the hardware
 
 # Motor PWM pins (2 PWM channels per motor; active low: 65535 = OFF, lower = faster)
-leftFwd = PWM(Pin(2))
-leftRev = PWM(Pin(3))
+leftFwd = PWM(Pin(3))
+leftRev = PWM(Pin(2))
 rightFwd = PWM(Pin(4))
 rightRev = PWM(Pin(5))
 

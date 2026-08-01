@@ -23,6 +23,10 @@ class HardwareSimulation:
         self.right_fwd_duty = 65535
         self.right_rev_duty = 65535
         self.max_wheel_speed_mms = config.MAX_WHEEL_SPEED_MMS  # mm/s at 100% duty
+        # Simulated time, advanced only by step_physics. On PC the drive routines
+        # step physics instead of sleeping, so wall-clock time is NOT the sim's
+        # clock -- anything timestamping sim events must read this instead.
+        self.elapsed_seconds = 0.0
 
         self.adc_pin_map = {
             28: "left",
@@ -54,6 +58,7 @@ class HardwareSimulation:
     def step_physics(self, delta_time_seconds):
         left_speed, right_speed = self.compute_wheel_speeds()
         self.mouse.step(left_speed, right_speed, delta_time_seconds)
+        self.elapsed_seconds += delta_time_seconds
 
     def read_adc(self, pin_id):
         sensor_role = self.adc_pin_map.get(pin_id, "front")
@@ -71,8 +76,13 @@ def get_mouse_state():
     return simulation_engine.mouse
 
 
-def step_sim_physics(delta_time_seconds=0.01):
+def step_sim_physics(delta_time_seconds=config.SIM_TIMESTEP_S):
     simulation_engine.step_physics(delta_time_seconds)
+
+
+def sim_time_ms():
+    """Milliseconds of SIMULATED time since import, advanced only by stepping."""
+    return int(simulation_engine.elapsed_seconds * 1000.0)
 
 ### Mock MicroPython machine classes ----------------------------------------------------------------
 

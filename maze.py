@@ -67,14 +67,24 @@ def num_file_export(path_str, cells):
                 file_handle.write(f"{x} {y} {int(n)} {int(e)} {int(s)} {int(w)}\n")
 
 
+def file_exists(path_str):
+    """os.path-free existence check. os.stat raises OSError for missing paths on
+    both CPython and MicroPython (whose os module has no `path` submodule)."""
+    try:
+        os.stat(path_str)
+        return True
+    except OSError:
+        return False
+
+
 def available_mazes(directory_path):
     """List all .num maze files in a directory."""
-    if not os.path.exists(directory_path):
+    if not file_exists(directory_path):
         return []
     file_list = []
     for filename in sorted(os.listdir(directory_path)):
         if filename.endswith(".num"):
-            file_list.append(os.path.join(directory_path, filename))
+            file_list.append(directory_path.rstrip("/") + "/" + filename)
     return file_list
 
 

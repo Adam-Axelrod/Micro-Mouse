@@ -1,3 +1,4 @@
+import math
 import pygame
 import time
 
@@ -74,8 +75,38 @@ class Renderer:
                     time.sleep(0.05) # nice animation
                     pygame.display.flip()
         
+        if mouse is not None:
+            self._draw_mouse(mouse)
+
         pygame.display.flip()
         self.clock.tick(60) # also replace with config num
+
+    """Echo the sim's continuous pose as a rotated chassis rectangle. Pure observer: samples
+    MouseState (x_mm, y_mm, heading_radians) and the config chassis constants; body frame is
+    +y forward / +x right around the wheel axle, matching MouseState's sensor frame. The
+    yellow nose line points along heading."""
+    def _draw_mouse(self, mouse):
+        cos_h = math.cos(mouse.heading_radians)
+        sin_h = math.sin(mouse.heading_radians)
+        half_width = config.BODY_WIDTH_MM / 2.0
+        corners_body = (  # (forward, lateral) offsets from the axle centre
+            (config.WHEEL_AXIS_TO_FRONT_MM, -half_width),
+            (config.WHEEL_AXIS_TO_FRONT_MM,  half_width),
+            (-config.WHEEL_AXIS_TO_BACK_MM,  half_width),
+            (-config.WHEEL_AXIS_TO_BACK_MM, -half_width),
+        )
+        points_px = [self._px(mouse.x_mm + fwd * cos_h - lat * sin_h,
+                              mouse.y_mm + fwd * sin_h + lat * cos_h)
+                     for fwd, lat in corners_body]
+        pygame.draw.polygon(self.screen, (220, 60, 60), points_px, 2)
+        nose = self._px(mouse.x_mm + config.WHEEL_AXIS_TO_FRONT_MM * cos_h,
+                        mouse.y_mm + config.WHEEL_AXIS_TO_FRONT_MM * sin_h)
+        pygame.draw.line(self.screen, (255, 200, 0), self._px(mouse.x_mm, mouse.y_mm), nose, 2)
+
+    """World mm -> screen px, flipping the y-axis (maze 0,0 bottom-left; pygame 0,0 top-left)."""
+    def _px(self, x_mm, y_mm):
+        return (x_mm * config.PX_PER_MM + self.offset,
+                (self.maze_height_mm - y_mm) * config.PX_PER_MM + self.offset)
 
     """Turn a (BL, BR, TR, TL) mm-corner polygon into a pygame (x, y, w, h) rect, deriving width/height
     straight from the corners instead of a hardcoded config constant, and flipping the y-axis (maze 0,0 is 

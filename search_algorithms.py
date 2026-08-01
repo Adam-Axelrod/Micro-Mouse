@@ -1,6 +1,4 @@
-### Imports ----------------------------------------------------------------------------------------- 
-
-from collections import deque
+### Imports -----------------------------------------------------------------------------------------
 
 import config
 import explorer
@@ -35,10 +33,15 @@ heading for right now (the maze centre on the way out, the start on a return run
 property, so it is passed in rather than read from maze.goal."""
 
 def flood_distances(maze, destination):
+    # A plain list with a head index is the queue: append to grow the frontier,
+    # advance `head` to pop. This is O(1) amortised and avoids collections.deque,
+    # whose MicroPython signature requires a maxlen the CPython call omitted.
     distances = {destination: 0} # Distance dict
-    frontier = deque([destination])
-    while frontier:
-        cell = frontier.popleft()
+    frontier = [destination]
+    head = 0
+    while head < len(frontier):
+        cell = frontier[head]
+        head += 1
         for nxt in open_neighbours(maze, cell):
             if nxt not in distances:          # first time we reach it = shortest
                 distances[nxt] = distances[cell] + 1
@@ -79,6 +82,31 @@ def flood_fill(maze, position, destination=None):
 
     return path
 
+### Route validity ----------------------------------------------------------------------------------
+
+def route_is_open(maze, route):
+    """True if every step of `route` is still passable in this belief map.
+
+    A route is a list of grid-adjacent cells. It stays valid until an observation
+    marks a wall across one of its steps, so this is the test for "do I need to
+    re-plan?". Flood-filling every tick is wasted work: the belief only changes
+    where a sensor reported something, and a wall that isn't on the current route
+    cannot make the current route worse.
+
+    A route of fewer than two cells is trivially open (there is nothing to walk).
+    """
+    for cell, nxt in zip(route, route[1:]):
+        if cell not in maze.cells:
+            return False
+        delta = (nxt[0] - cell[0], nxt[1] - cell[1])
+        side = config.DELTA_SIDE.get(delta)
+        if side is None:                       # not grid-adjacent: not a walkable route
+            return False
+        if maze.cells[cell][config.WALL_INDEX[side]]:
+            return False                       # a wall now blocks this step
+    return True
+
+
 ### Hug Left ----------------------------------------------------------------------------------------
 
 def hug_left(maze, position, destination=None):
@@ -99,3 +127,16 @@ if __name__ == "__main__":
     route = flood_fill(ex.belief_map, ex.pos)
     print("planned route on blank belief:", route)
     assert route[0] == ex.pos and route[-1] == ex.belief_map.goal # starts at start and ends at goal
+
+    # route_is_open: a fresh plan is walkable, and a wall dropped across its first
+    # step invalidates it -- that is exactly the replan trigger.
+    assert route_is_open(ex.belief_map, route)
+    ex.observe(route[0], [config.DELTA_SIDE[(route[1][0] - route[0][0],
+                                             route[1][1] - route[0][1])]])
+    assert not route_is_open(ex.belief_map, route)
+    # A wall somewhere else on the map leaves an unrelated route alone.
+    ex2 = explorer.Explorer()
+    route2 = flood_fill(ex2.belief_map, ex2.pos)
+    ex2.observe((15, 15), ["w"])
+    assert route_is_open(ex2.belief_map, route2)
+    print("route_is_open replan trigger OK")

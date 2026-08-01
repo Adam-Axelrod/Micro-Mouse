@@ -12,7 +12,7 @@ class Explorer:
     def __init__(self, belief_map=None, destination=None, pos=None):
         self.belief_map = belief_map if belief_map else maze.MazeStructure()
         self.destination = destination if destination else self.belief_map.goal
-        self.pos = pos if pos else (0,0)
+        self.pos = pos if pos else config.START_POS
         self.next_pos = self.pos
         self.path_done = [self.pos]
         self.path_to_execute = []
