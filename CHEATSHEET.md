@@ -17,7 +17,7 @@ that disagrees.
 | pin 4 = right forward, pin 5 = right reverse | BT-2 raw-channel sweep |
 | `drive_motors(+, +)` drives both wheels forward | BT-2 |
 | Both PWM channels at 65535 = **brake** (stops dead, no coast) | BT-3 |
-| Buttons: SW1 = pin 15 (explore), SW2 = pin 14 (speed run), active low | BT-1 |
+| Buttons: SW1 = pin 15 (mode selector: 1=explore, 2=speed run, 3=bench test), SW2 = pin 14 (mode execute), active low | BT-1 |
 | Sensors respond to a wall: L +2289, F +4427, R +2292 counts | BT-6 |
 
 **Still broken / unverified:**

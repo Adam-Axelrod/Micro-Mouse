@@ -62,6 +62,7 @@ class Explorer:
         self.next_pos = target
         self.move_to_target()
 
+    @staticmethod
     def turn_clockwise(direction): #One clockwise pivot: n -> e -> s -> w -> n
         return config.DIRECTIONS[(config.DIRECTIONS.index(direction) + 1) % len(config.DIRECTIONS)]
 

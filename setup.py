@@ -31,8 +31,10 @@ for pwm_chan in (leftFwd, leftRev, rightFwd, rightRev):
     pwm_chan.duty_u16(65535)
 
 # Tactile Buttons / Mode Switches (SW1 / SW2)
-leftButton = Pin(15, Pin.IN, Pin.PULL_UP)   # SW1: Left button (Exploration)
-rightButton = Pin(14, Pin.IN, Pin.PULL_UP)  # SW2: Right button (Speed Run)
+leftButton = Pin(15, Pin.IN, Pin.PULL_UP)   # SW1: Left button (Mode selector)
+rightButton = Pin(14, Pin.IN, Pin.PULL_UP)  # SW2: Right button (Mode execute)
+sw1 = leftButton
+sw2 = rightButton
 
 # Reflective sensor ADC inputs (phototransistors)
 leftSensor = ADC(28)   # Left wall sensor

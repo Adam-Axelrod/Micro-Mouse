@@ -47,17 +47,19 @@ Designed so the **exact same code** runs on both PC simulation and Pico hardware
 
 ## 2. Operation Modes (`main.py`)
 
-When `main.py` runs, it selects the operation mode based on button input:
+When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboard LED blinks ($N$ blinks = Mode $N$), and **SW2 (Pin 14)** executes the selected mode:
 
-1. **Exploration Mode (Left Button / `leftButton` - Pin 15)**:
+1. **Mode 1: Exploration Mode (`--step` / `--explorer`)**:
    * Mouse explores the maze cell-by-cell using flood-fill (`search_algorithms.py`).
    * Updates its `belief_map` upon sensing walls.
    * Exports the discovered maze layout to `belief.num` upon completion.
-2. **Speed Run Mode (Right Button / `rightButton` - Pin 14)**:
+2. **Mode 2: Speed Run Mode (`--speed`)**:
    * Loads the saved grid map (`belief.num`) or `groundtruth.num`.
    * Calculates the optimal shortest path using flood fill.
    * Translates the path into egocentric verbs (`F n`, `L`, `R`, `U`, `H`) via `commands.py`.
    * Drives the mouse through the movement sequence.
+3. **Mode 3: Bench Test Mode (`--bench`)**:
+   * Runs bringing-up hardware checks end-to-end (`bench_test.py`).
 
 ---
 

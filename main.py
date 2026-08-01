@@ -316,9 +316,51 @@ def run_speed_run_mode(enable_render=False):
     execute_movement_commands(movement_commands, render_object, belief, route)
 
 
+def run_bench_test_mode(enable_render=False):
+    print("=== STARTING BENCH TEST MODE ===")
+    blink_led(3, on_duration_ms=100, off_duration_ms=100)
+    import bench_test
+    bench_test.run_all()
+
+
+# Mode definitions: 1 = Explorer, 2 = Speed Run, 3 = Bench Test
+MODES = [
+    {
+        "id": 1,
+        "name": "Explorer",
+        "func": run_exploration_mode,
+    },
+    {
+        "id": 2,
+        "name": "Speed Run",
+        "func": run_speed_run_mode,
+    },
+    {
+        "id": 3,
+        "name": "Bench Test",
+        "func": run_bench_test_mode,
+    },
+]
+
+
 def main():
     enable_render = "--render" in sys.argv or "-r" in sys.argv
-    step_mode_requested = "--step" in sys.argv
+
+    # Check CLI mode overrides
+    cli_mode = None
+    if "--step" in sys.argv or "--explorer" in sys.argv:
+        cli_mode = 1
+    elif "--speed" in sys.argv:
+        cli_mode = 2
+    elif "--bench" in sys.argv:
+        cli_mode = 3
+    else:
+        for arg in sys.argv:
+            if arg.startswith("--mode="):
+                try:
+                    cli_mode = int(arg.split("=")[1])
+                except ValueError:
+                    pass
 
     # Trace motor commands whenever there is no sim to watch -- i.e. always on the
     # Pico, which is the run that is otherwise invisible. On PC it is opt-in
@@ -330,25 +372,66 @@ def main():
 
     stop_motors()
 
-    print("Maze Mouse Ready. Press LEFT button for Exploration, RIGHT button for Speed Run.")
+    print("Maze Mouse Ready.")
+    print("  SW1: Select Mode (1: Explorer, 2: Speed Run, 3: Bench Test)")
+    print("  SW2: Execute Selected Mode")
+
     if enable_render:
         print("[Rendering Enabled via CLI argument]")
         if not HAS_PYGAME:
             print(f"  ...but the renderer failed to import ({RENDER_IMPORT_ERROR}); running headless.")
 
-    blink_led(2, on_duration_ms=200, off_duration_ms=200)
+    current_mode = 1
 
-    left_button_pressed = (setup.leftButton.value() == 0)
-    right_button_pressed = (setup.rightButton.value() == 0)
+    # CLI explicit mode override
+    if cli_mode in (1, 2, 3):
+        print(f"CLI requested Mode {cli_mode}: {MODES[cli_mode - 1]['name']}")
+        try:
+            MODES[cli_mode - 1]["func"](enable_render=enable_render)
+        finally:
+            if want_trace:
+                MOTOR_TRACE.close()
+                print(f"[Motor trace: {MOTOR_TRACE.records_written} records]")
+        return
+
+    # Check hardware button presses at startup
+    sw1_pressed = (setup.sw1.value() == 0)
+    sw2_pressed = (setup.sw2.value() == 0)
 
     try:
-        if step_mode_requested or left_button_pressed:  # --step is the PC's left button
-            run_exploration_mode(enable_render=enable_render)
-        elif right_button_pressed:
-            run_speed_run_mode(enable_render=enable_render)
-        else:
-            print("No button pressed. Defaulting to Speed Run mode.")
-            run_speed_run_mode(enable_render=enable_render)
+        if sw1_pressed:
+            current_mode = (current_mode % len(MODES)) + 1
+            print(f"[SW1 Pressed] Selected Mode {current_mode}: {MODES[current_mode - 1]['name']}")
+            blink_led(current_mode)
+            while setup.sw1.value() == 0:
+                time.sleep(0.02)
+        elif sw2_pressed:
+            print(f"[SW2 Pressed] Executing Mode {current_mode}: {MODES[current_mode - 1]['name']}")
+            MODES[current_mode - 1]["func"](enable_render=enable_render)
+            return
+
+        # On PC sim with no buttons held, default to Speed Run (Mode 2)
+        if not setup.IS_HARDWARE:
+            print("No button pressed (PC Sim). Defaulting to Mode 2: Speed Run.")
+            MODES[1]["func"](enable_render=enable_render)
+            return
+
+        # On hardware (Pico), wait for button presses
+        blink_led(current_mode)
+        while True:
+            if setup.sw1.value() == 0:
+                current_mode = (current_mode % len(MODES)) + 1
+                print(f"[SW1] Selected Mode {current_mode}: {MODES[current_mode - 1]['name']}")
+                blink_led(current_mode)
+                while setup.sw1.value() == 0:
+                    time.sleep(0.02)
+            elif setup.sw2.value() == 0:
+                print(f"[SW2] Executing Mode {current_mode}: {MODES[current_mode - 1]['name']}")
+                while setup.sw2.value() == 0:
+                    time.sleep(0.02)
+                MODES[current_mode - 1]["func"](enable_render=enable_render)
+                break
+            time.sleep(0.05)
     finally:
         # Close the trace even if the run dies mid-route: a crashed run is
         # exactly the one worth replaying.
@@ -359,3 +442,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
