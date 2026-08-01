@@ -91,8 +91,14 @@ class Encoders:
         self.get_counts(reset=True)
 
     def get_counts(self, reset=False):
+        # Both raw counters are negated so that FORWARD wheel motion counts
+        # POSITIVE, which is the sign convention the rest of the firmware
+        # assumes. The right side was bench-measured 2026-08-01 (BT-4/BT-5):
+        # rolling and driving it forward both gave negative raw counts.
+        # The left side's sign is still UNVERIFIED -- its encoder is dead
+        # (broken J1 signal line), so re-check it after that repair.
         left_count = -self.left_counter.read() - self.left_offset
-        right_count = self.right_counter.read() - self.right_offset
+        right_count = -self.right_counter.read() - self.right_offset
 
         if reset:
             self.left_offset += left_count

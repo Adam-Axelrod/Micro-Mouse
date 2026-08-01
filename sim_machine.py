@@ -40,13 +40,19 @@ class HardwareSimulation:
         self.segments = MazeGeometry(maze_instance).segments
 
     def set_motor_duty(self, pin_id, duty):
-        if pin_id == 2:
+        # Pin map bench-confirmed on the real board 2026-08-01 (BT-2): driving
+        # pin 3 alone runs the left wheel forward, and drive_motors(+,+) moved
+        # both wheels forward. setup.py was right; this map was inverted.
+        # The legacy ids (9, 7, 17, 8) that used to alias these channels are
+        # gone: 7 and 8 are encoder inputs, so mapping them to a motor was a
+        # latent trap, and pin 3 cannot mean both directions at once.
+        if pin_id == 3:
             self.left_fwd_duty = duty
-        elif pin_id in (3, 9, 7):
+        elif pin_id == 2:
             self.left_rev_duty = duty
         elif pin_id == 4:
             self.right_fwd_duty = duty
-        elif pin_id in (5, 17, 8):
+        elif pin_id == 5:
             self.right_rev_duty = duty
 
     def compute_wheel_speeds(self):

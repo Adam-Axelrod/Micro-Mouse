@@ -25,7 +25,10 @@ rightRev = PWM(Pin(5))
 
 for pwm_chan in (leftFwd, leftRev, rightFwd, rightRev):
     pwm_chan.freq(2000)
-    pwm_chan.duty_u16(65535)  # Default OFF (active-low brake)
+    # Both channels of a motor held at 65535 = BRAKE (bench-confirmed 2026-08-01,
+    # BT-3: the wheels stop dead, they do not freewheel). A single channel at
+    # 65535 with the other driven low is that channel OFF, i.e. normal drive.
+    pwm_chan.duty_u16(65535)
 
 # Tactile Buttons / Mode Switches (SW1 / SW2)
 leftButton = Pin(15, Pin.IN, Pin.PULL_UP)   # SW1: Left button (Exploration)
