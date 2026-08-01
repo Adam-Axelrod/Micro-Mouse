@@ -43,8 +43,7 @@ main.py setup.py config.py maze.py explorer.py search_algorithms.py
 commands.py motor_log.py  +  belief.num
 ```
 
-Add for hardware work: `bench_test.py`, `diagnostic_encoders.py`,
-`encoder_fault_test.py`.
+Add for hardware work: `bench_test.py`, `diagnostic_encoders.py`.
 
 With `mpremote` (the VS Code MicroPico extension does the same thing via its
 "Upload project" command):
@@ -119,11 +118,12 @@ the printed line.
 ### Deeper encoder fault-finding
 
 ```python
-import encoder_fault_test
-encoder_fault_test.monitor()          # hand-roll, watch counts
-encoder_fault_test.channel_levels()   # which of A/B is pinned = the open line
-encoder_fault_test.wiggle_watch()     # flex the board, catch intermittents
-encoder_fault_test.spin_check()       # POWERED, wheels off the ground
+import bench_test
+bench_test.monitor()          # hand-roll, watch counts
+bench_test.channel_levels()   # which of A/B is pinned = the open line
+bench_test.wiggle_watch()     # flex the board, catch intermittents
+bench_test.spin_check()       # POWERED, wheels off the ground
+bench_test.encoder_fault_menu() # interactive menu
 ```
 
 ---

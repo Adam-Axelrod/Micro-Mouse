@@ -22,6 +22,13 @@ produces BENCH EVIDENCE: every check ends in a recorded PASS/FAIL/value that
         bt7_counts_per_rev()    passive  push a measured distance, get ticks/rev
         bt8_track_width()       passive  pivot 360 by hand, derive track width
 
+    Deep encoder fault-finding tools (dead channel, intermittent trace, J1 flex):
+        channel_levels()        passive  raw A/B logic level (pins 8/9 & 6/7)
+        monitor()               passive  continuous live tick count monitoring
+        wiggle_watch()          passive  flex board near J1, catch intermittent cracks
+        spin_check()            POWERED  brief pulse with runaway guard
+        encoder_fault_menu()    interactive fault diagnostic menu
+
 POWERED checks demand the wheels are OFF THE GROUND and ask you to confirm it
 before any duty is written. Every powered pulse is hard-capped by
 MAX_PULSE_MS and always ends in stop_motors().
@@ -29,9 +36,6 @@ MAX_PULSE_MS and always ends in stop_motors().
 Several checks cannot be judged by the software -- only you can see which way a
 wheel turned. Those ask a question and record YOUR answer; that is deliberate,
 the operator is the sensor. Answers are y / n / s (skip).
-
-Deep encoder fault-finding (dead channel, intermittent trace, J1 flex) lives in
-`encoder_fault_test.py` -- bt4 only tells you whether to go there.
 
 Needs the Pico's rp2/PIO for the encoder checks, so it does not run on the PC.
 """
@@ -56,6 +60,10 @@ SETTLE_MS = 300              # let a wheel come to rest before reading counts (m
 # A wheel this many ticks from baseline counts as "definitely moved" -- above
 # quadrature jitter, well below one hand-roll revolution (~1400 ticks).
 MOVED_TICKS = 20
+
+# Encoder A/B pins (left = 8/9, right = 6/7)
+LEFT_ENC_A, LEFT_ENC_B = 8, 9
+RIGHT_ENC_A, RIGHT_ENC_B = 6, 7
 
 # Emitter settle time before reading the lit ADC value (ms). The phototransistor
 # needs the LED to actually be on; reading too early samples the unlit state.
@@ -408,7 +416,7 @@ def _hand_roll_one(label, index, check_id):
     before = _counts()
     if before is None:
         _record(check_id, "FAIL", "encoder decoder unavailable: {}".format(_encoder_error))
-        return
+        return False
     _pause("roll the {} wheel forward by hand, about one full turn".format(label))
     after = _counts()
     delta_left = after[0] - before[0]
@@ -422,17 +430,21 @@ def _hand_roll_one(label, index, check_id):
     if abs(mine) <= MOVED_TICKS:
         _record(check_id, "FAIL",
                 "{} count did not move ({:+} ticks) -- dead channel, "
-                "go to encoder_fault_test.py".format(label, mine))
+                "use channel_levels() or wiggle_watch()".format(label, mine))
+        return False
     elif abs(other) > MOVED_TICKS:
         _record(check_id, "FAIL",
                 "{} roll moved BOTH counts (dL={:+}, dR={:+}) -- channels crossed".format(
                     label, delta_left, delta_right))
+        return False
     elif mine < 0:
         _record(check_id, "VALUE",
                 "{} alive but rolls NEGATIVE forward ({:+} ticks) -- "
                 "invert the sign in diagnostic_encoders.get_counts".format(label, mine))
+        return True
     else:
         _record(check_id, "PASS", "{} alive, forward = positive ({:+} ticks)".format(label, mine))
+        return True
 
 
 def bt4_encoders_passive():
@@ -440,13 +452,182 @@ def bt4_encoders_passive():
     print("")
     print("== BT-4  encoders, hand-roll ==")
     print("  Known live trap: the LEFT encoder is dead via a broken J1 signal line")
-    print("  (pins 8/9). If BT-4.left fails, encoder_fault_test.py isolates which")
-    print("  of the two channels is open.")
+    print("  (pins 8/9). If BT-4.left fails, channel_levels() isolates which")
+    print("  of the two channels is open, and wiggle_watch() checks for hairline cracks.")
     if _get_encoders() is None:
         _record("BT-4", "FAIL", "encoder decoder unavailable: {}".format(_encoder_error))
         return
-    _hand_roll_one("LEFT", 0, "BT-4.left")
-    _hand_roll_one("RIGHT", 1, "BT-4.right")
+    left_ok = _hand_roll_one("LEFT", 0, "BT-4.left")
+    right_ok = _hand_roll_one("RIGHT", 1, "BT-4.right")
+
+    if not left_ok or not right_ok:
+        print("")
+        print("  [!] Encoder issue detected during BT-4.")
+        choice = _ask("Open deep encoder fault diagnostics menu now?")
+        if choice is True:
+            encoder_fault_menu()
+
+
+# ======================================================================================
+# Deep Encoder Fault Diagnostics (folded from encoder_fault_test.py)
+# ======================================================================================
+
+def channel_levels(period_ms=100):
+    """Show the raw A/B logic level of all four encoder channels.
+
+    Roll ONE wheel slowly by hand and watch its two channels: a healthy channel
+    alternates 0/1/0/1 as the slots pass; a dead channel stays pinned at one
+    value. The pinned pin is the open signal line -- that is the trace to buzz
+    for continuity (compare against the same channel on the good wheel).
+
+    Reads the pins directly (no PIO), so run this on its own -- Ctrl-C to stop.
+    """
+    try:
+        from machine import Pin
+    except ImportError:
+        print("  !! channel_levels requires MicroPython machine module (Pico hardware only)")
+        return
+
+    left_a = Pin(LEFT_ENC_A, Pin.IN, Pin.PULL_UP)
+    left_b = Pin(LEFT_ENC_B, Pin.IN, Pin.PULL_UP)
+    right_a = Pin(RIGHT_ENC_A, Pin.IN, Pin.PULL_UP)
+    right_b = Pin(RIGHT_ENC_B, Pin.IN, Pin.PULL_UP)
+    print("Raw channel levels -- roll ONE wheel slowly by hand. Ctrl-C to stop.")
+    print("(a healthy channel toggles 0/1; a dead one stays fixed)")
+    print("          left            right")
+    print("        A(8) B(9)       A(6) B(7)")
+    try:
+        while True:
+            print("        {}    {}          {}    {}".format(
+                left_a.value(), left_b.value(), right_a.value(), right_b.value()))
+            time.sleep_ms(period_ms)
+    except KeyboardInterrupt:
+        print("done")
+
+
+def monitor(period_ms=200):
+    """Roll each wheel forward by hand and watch its count climb.
+
+    A wheel whose count stays put while you roll it has NO encoder feedback --
+    that is the dead J1 channel. The healthy wheel's count will track your hand.
+    Ctrl-C to stop and print a verdict.
+    """
+    enc = _get_encoders()
+    if enc is None:
+        print("  !! encoders unavailable: {}".format(_encoder_error))
+        return
+    left_base, right_base = enc.get_counts()
+    left_seen = right_seen = False
+    print("Passive roll test -- turn each wheel by hand. Ctrl-C to stop.")
+    print("(count should climb for whichever wheel you are rolling)")
+    try:
+        while True:
+            left, right = enc.get_counts()
+            dl, dr = left - left_base, right - right_base
+            if abs(dl) > MOVED_TICKS:
+                left_seen = True
+            if abs(dr) > MOVED_TICKS:
+                right_seen = True
+            print("L={:>8} ({:>+7} tk / {:>+7.0f} mm)   R={:>8} ({:>+7} tk / {:>+7.0f} mm)   [{} {}]".format(
+                left, dl, _mm(dl), right, dr, _mm(dr),
+                "L-ok" if left_seen else "L-??",
+                "R-ok" if right_seen else "R-??"))
+            time.sleep_ms(period_ms)
+    except KeyboardInterrupt:
+        print("\n--- verdict ---")
+        print("  left  encoder:", "responding" if left_seen else "DEAD -- no counts while rolled")
+        print("  right encoder:", "responding" if right_seen else "DEAD -- no counts while rolled")
+
+
+def wiggle_watch(threshold=MOVED_TICKS, poll_ms=5):
+    """Flex/tap the board near J1 with the wheels held STILL.
+
+    Prints only when a count actually changes, with a timestamp -- so a
+    momentary tick appearing as you press near the J1 pad or its mounting slot
+    means the trace is reconnecting under flex, i.e. a hairline crack rather
+    than a clean break. Silence while you flex = the break is fully open (or
+    you're flexing the wrong spot). Ctrl-C to stop.
+    """
+    enc = _get_encoders()
+    if enc is None:
+        print("  !! encoders unavailable: {}".format(_encoder_error))
+        return
+    left_prev, right_prev = enc.get_counts()
+    print("Wiggle test -- keep wheels still, flex the board near J1. Ctrl-C to stop.")
+    try:
+        while True:
+            left, right = enc.get_counts()
+            if abs(left - left_prev) >= threshold or abs(right - right_prev) >= threshold:
+                print("t={:>9}ms  L {:>8} ({:>+5})  R {:>8} ({:>+5})  <-- movement with wheels still".format(
+                    time.ticks_ms(), left, left - left_prev, right, right - right_prev))
+                left_prev, right_prev = left, right
+            time.sleep_ms(poll_ms)
+    except KeyboardInterrupt:
+        print("done")
+
+
+def spin_check(power=BENCH_DUTY_POWER, timeout_ms=400, settle_ms=500):
+    """POWERED test -- PUT THE MOUSE ON BLOCKS, WHEELS OFF THE GROUND.
+
+    Briefly drives each wheel forward and confirms that wheel's OWN encoder
+    registered motion. Software version of J1/J2 cable swap check with runaway guard.
+    Ctrl-C aborts and stops the motors.
+    """
+    enc = _get_encoders()
+    if enc is None:
+        print("  !! encoders unavailable: {}".format(_encoder_error))
+        return
+    if not _require_wheels_off_ground():
+        print("  Aborted -- wheels not clear.")
+        return
+    print("!!! POWERED spin check. Wheels OFF THE GROUND. Starting in 2s -- Ctrl-C to abort.")
+    time.sleep(2)
+    try:
+        wheels = (
+            ("left", setup.leftFwd, setup.leftRev, 0),
+            ("right", setup.rightFwd, setup.rightRev, 1),
+        )
+        for name, fwd, rev, index in wheels:
+            base = enc.get_counts()[index]
+            _pulse_raw_channel(fwd, name + "Fwd", timeout_ms)
+            moved = abs(enc.get_counts()[index] - base)
+            if moved > MOVED_TICKS:
+                print("  {:>5} motor -> encoder OK ({} ticks / {:.0f} mm)".format(name, moved, _mm(moved)))
+            else:
+                print("  {:>5} motor -> NO ENCODER FEEDBACK ({} ticks) -- suspect this channel's trace".format(name, moved))
+            time.sleep_ms(settle_ms)
+    finally:
+        main.stop_motors()
+
+
+def encoder_fault_menu():
+    """Interactive deep diagnostic menu for encoder troubleshooting."""
+    print("")
+    print("--- ENCODER FAULT DIAGNOSTICS ---")
+    print("  1) Raw channel levels (channel_levels) - pin 8/9 & 6/7 0/1 levels")
+    print("  2) Continuous monitor (monitor)       - live tick counts per wheel")
+    print("  3) Wiggle watch       (wiggle_watch)   - flex board near J1, catch cracks")
+    print("  4) Powered spin check (spin_check)     - brief pulse with runaway guard")
+    print("  5) Return to bench tests")
+    while True:
+        opt = input("  Select diagnostic tool [1-5]: ").strip()
+        if opt == "1":
+            channel_levels()
+        elif opt == "2":
+            monitor()
+        elif opt == "3":
+            wiggle_watch()
+        elif opt == "4":
+            spin_check()
+        elif opt in ("5", "q", "exit", ""):
+            break
+
+
+# Aliases for explicit naming clarity
+encoder_channel_levels = channel_levels
+encoder_monitor = monitor
+encoder_wiggle_watch = wiggle_watch
+encoder_spin_check = spin_check
 
 
 # ======================================================================================
