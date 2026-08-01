@@ -113,6 +113,22 @@ class Pin:
         if val is not None:
             self._pin_value = int(val)
             return self._pin_value
+
+        # Symmetrical simulation of hardware buttons on PC:
+        # Check Pygame keyboard state if Pygame is active for SW1 (Pin 15) and SW2 (Pin 14)
+        if self.id in (15, 14):
+            try:
+                import pygame
+                if pygame.get_init() and pygame.display.get_surface() is not None:
+                    pygame.event.pump()
+                    keys = pygame.key.get_pressed()
+                    if self.id == 15 and (keys[pygame.K_1] or keys[pygame.K_s] or keys[pygame.K_LEFT]):
+                        return 0
+                    if self.id == 14 and (keys[pygame.K_2] or keys[pygame.K_e] or keys[pygame.K_RETURN] or keys[pygame.K_SPACE] or keys[pygame.K_RIGHT]):
+                        return 0
+            except Exception:
+                pass
+
         return self._pin_value
 
 
