@@ -3,3 +3,7 @@ venv/
 .env
 __pycache__/
 *.pyc
+
+# Motor traces are run artefacts (one per run), not source. Copy a Pico trace in
+# under its own name if you want to keep it.
+motor_log.csv
