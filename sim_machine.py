@@ -90,6 +90,29 @@ def sim_time_ms():
     """Milliseconds of SIMULATED time since import, advanced only by stepping."""
     return int(simulation_engine.elapsed_seconds * 1000.0)
 
+class SimEncoders:
+    """Tick counters read off the simulated pose.
+
+    Same interface as the Pico's PIO decoder, same sign convention: forward is
+    positive on both wheels. MouseState accumulates ticks from exact wheel
+    travel, so these do not drift the way integrating them would.
+    """
+
+    def __init__(self):
+        self.left_offset = 0
+        self.right_offset = 0
+        self.get_counts(reset=True)
+
+    def get_counts(self, reset=False):
+        mouse = simulation_engine.mouse
+        left_count = mouse.left_encoder_ticks - self.left_offset
+        right_count = mouse.right_encoder_ticks - self.right_offset
+        if reset:
+            self.left_offset += left_count
+            self.right_offset += right_count
+        return left_count, right_count
+
+
 ### Mock MicroPython machine classes ----------------------------------------------------------------
 
 class Pin:

@@ -18,6 +18,7 @@ except AttributeError:
 
 import bench_test
 import exploration
+import max_speed_test
 import speed_run
 import setup
 
@@ -26,11 +27,14 @@ def run_bench(**kwargs):
     bench_test.run_all()
 
 
-# 0-indexed array of available modes: (Name, Runner Function)
+# 0-indexed array of available modes: (Name, Runner Function). Every runner
+# accepts enable_render, so the dispatcher never special-cases an index.
 MODES = [
     ("Explorer", exploration.run),
     ("Speed Run", speed_run.run),
     ("Bench Test", run_bench),
+    ("Max Speed Test", max_speed_test.run),
+    ("Stress Test", max_speed_test.stress),
 ]
 
 
@@ -53,6 +57,10 @@ def main():
         cli_mode_idx = 1
     elif "--bench" in sys.argv:
         cli_mode_idx = 2
+    elif "--maxspeed" in sys.argv:
+        cli_mode_idx = 3
+    elif "--stress" in sys.argv:
+        cli_mode_idx = 4
     else:
         for arg in sys.argv:
             if arg.startswith("--mode="):
@@ -74,7 +82,7 @@ def main():
     if cli_mode_idx is not None:
         name, runner = MODES[cli_mode_idx]
         print(f"CLI requested Mode {cli_mode_idx + 1}: {name}")
-        runner(enable_render=enable_render) if cli_mode_idx < 2 else runner()
+        runner(enable_render=enable_render)
         return
 
     current_mode = 0  # 0-based index (Mode 1 default)
@@ -89,7 +97,7 @@ def main():
     elif setup.sw2.value() == 0:
         name, runner = MODES[current_mode]
         print(f"[SW2] Executing Mode {current_mode + 1}: {name}")
-        runner(enable_render=enable_render) if current_mode < 2 else runner()
+        runner(enable_render=enable_render)
         return
 
     # Non-interactive PC sim default: if no button is held and running on PC
@@ -112,7 +120,7 @@ def main():
             print(f"[SW2] Executing Mode {current_mode + 1}: {name}")
             while setup.sw2.value() == 0:
                 time.sleep(0.02)
-            runner(enable_render=enable_render) if current_mode < 2 else runner()
+            runner(enable_render=enable_render)
             break
         time.sleep(0.05)
 

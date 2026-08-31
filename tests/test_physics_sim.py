@@ -111,10 +111,36 @@ def test_setup_and_hardware_sim():
     print("✓ test_setup_and_hardware_sim passed (clean setup.py integration!)")
 
 
+def test_turn_verbs_hit_their_angles():
+    """A U must be 180 degrees, not 360.
+
+    It used to scale BOTH the pivot power and the pivot duration with the angle,
+    so it spun at twice the rate for the time a 180 needed and came back facing
+    the way it started. A route with a U in it went straight on.
+    """
+    import math
+    import speed_run
+
+    state = get_mouse_state()
+    for verb, expected_deg in (("L", 90.0), ("R", -90.0), ("U", 180.0)):
+        state.reset_pose(0.0, 0.0, 0.0)
+        speed_run.execute_movement_commands([verb])
+        turned = (math.degrees(state.heading_radians) + 180.0) % 360.0 - 180.0
+        error = ((turned - expected_deg + 180.0) % 360.0) - 180.0
+        assert abs(error) < 0.5, (verb, turned, expected_deg)
+
+    # And a full timed drive lands on the cell, with no timestep rounding.
+    state.reset_pose(0.0, 0.0, math.pi / 2.0)
+    speed_run.execute_movement_commands(["F 1"])
+    assert abs(state.y_mm - config.MM_PER_CELL) < 0.5, state.y_mm
+    print("✓ test_turn_verbs_hit_their_angles passed")
+
+
 if __name__ == "__main__":
     test_kinematics_straight()
     test_kinematics_pivot()
     test_kinematics_arc()
     test_encoder_ticks_do_not_drift()
     test_setup_and_hardware_sim()
+    test_turn_verbs_hit_their_angles()
     print("ALL PHYSICS SIM & SETUP TESTS PASSED!")

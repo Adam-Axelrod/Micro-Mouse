@@ -1,7 +1,7 @@
 # Robot cheatsheet
 
 Practical commands for driving the Gemini micromouse. For *why* things are the
-way they are, see the root `CLAUDE.md` / `DECISIONS.md`; this file is only
+way they are, see the root `CLAUDE.md` and `Logs/`; this file is only
 "which command do I type".
 
 ---
@@ -20,16 +20,6 @@ that disagrees.
 | Buttons: SW1 = pin 15 (mode selector: 1=explore, 2=speed run, 3=bench test), SW2 = pin 14 (mode execute), active low | BT-1 |
 | Sensors respond to a wall: L +2289, F +4427, R +2292 counts | BT-6 |
 
-**Still broken / unverified:**
-
-- **Left encoder is dead** (broken J1 signal line, pins 8/9). The left *motor*
-  is fine — BT-2 proved it turns. No closed-loop control is possible until
-  this is repaired.
-- Right encoder counts **negative** for forward, so `get_counts` negates it.
-  The left side's sign is unverified — re-check after the J1 repair.
-- `ENCODER_COUNTS_PER_WHEEL_REV` (config says 1400, one 150 mm sample said
-  ~1306) and `TRACK_WIDTH_MM` (config says 70, a one-encoder pivot implied
-  ~66) are both **still provisional**. Re-measure before trusting odometry.
 
 ---
 
@@ -39,17 +29,19 @@ Minimal deployment set (`CLAUDE.md` §Dual-target). Anything importing `pygame`
 or `geometry` must never go on the board:
 
 ```
-main.py setup.py config.py maze.py explorer.py search_algorithms.py
-commands.py motor_log.py  +  belief.num
+main.py setup.py config.py maze.py explorer.py exploration.py speed_run.py
+search_algorithms.py commands.py motor_log.py max_speed_test.py
+diagnostic_encoders.py  +  belief.num
 ```
 
-Add for hardware work: `bench_test.py`, `diagnostic_encoders.py`.
+`diagnostic_encoders.py` is now part of the base set: `setup.py` loads it on
+first encoder read. Add for hardware work: `bench_test.py`.
 
 With `mpremote` (the VS Code MicroPico extension does the same thing via its
 "Upload project" command):
 
 ```bash
-mpremote cp main.py setup.py config.py maze.py explorer.py search_algorithms.py commands.py motor_log.py belief.num :
+mpremote cp main.py setup.py config.py maze.py explorer.py exploration.py speed_run.py search_algorithms.py commands.py motor_log.py max_speed_test.py diagnostic_encoders.py belief.num :
 ```
 
 ```bash
@@ -130,11 +122,22 @@ bench_test.encoder_fault_menu() # interactive menu
 
 ## 5. Running the robot
 
-On the Pico, `main.py` runs at boot and picks its mode from the buttons:
+On the Pico, `main.py` runs at boot. SW1 selects a mode, SW2 runs it. After
+each SW1 press the onboard LED blinks the mode number, so you always know what
+SW2 will start.
 
-- **LEFT / SW1** → exploration (updates belief, writes `belief.num`)
-- **RIGHT / SW2** → speed run (loads `belief.num`, flood-fills, drives it)
-- **no press** → defaults to speed run
+| Mode | LED blinks | What it does |
+|---|---|---|
+| 1 | 1 | Explorer — updates the belief, writes `belief.num` |
+| 2 | 2 | Speed run — loads `belief.num`, flood-fills, drives it |
+| 3 | 3 | Bench test — the BT-0..BT-8 bring-up checks |
+| 4 | 4 | Max speed test — one 5.2 m dash at full duty (§5.1) |
+| 5 | 5 | Stress test — N laps of the sprint, then drift (§5.2) |
+
+Boot lands on mode 1 and blinks once. Each SW1 press steps to the next mode and
+blinks its number; mode 4 wraps back to mode 1. To reach mode 4 from boot,
+press SW1 three times and count four blinks, then press SW2. Mode 5 wraps
+back to mode 1.
 
 > Exploration has **no hardware path today** — `read_walls` reads
 > `groundtruth.num` (not deployed to the Pico) and returns all four sides. On
@@ -147,13 +150,211 @@ On the PC:
 ```bash
 python3 main.py            # headless sim, speed run
 python3 main.py --render   # with pygame
-python3 main.py --step     # exploration (the PC's "left button")
+python3 main.py --step     # mode 1, exploration
+python3 main.py --bench    # mode 3, bench test (Pico only)
+python3 main.py --maxspeed # mode 4, max speed test
+python3 main.py --stress   # mode 5, stress test
 python3 main.py --log      # also write a motor trace
 ```
 
 ---
 
-## 6. Watching a hardware run afterwards
+### 5.1 Max speed test (mode 4)
+
+This is how `MAX_WHEEL_SPEED_MMS` gets a measured number behind it. Every
+open-loop `F n` duration divides by that constant, and it has never been
+measured.
+
+Set up:
+
+1. Mark a start line and a line 5.00 m away on a clear, flat floor.
+2. Leave at least 0.7 m of run-off past the far mark. The robot targets
+   5.2 m, and it will overshoot if it is faster than the constant claims.
+3. Line the robot's nose up on the start line, pointing down the lane.
+4. Select mode 4 (SW1 ×3, count four blinks) and press SW2.
+
+What the LED does, in order:
+
+| Signal | Meaning |
+|---|---|
+| 4 fast blinks | armed — mode 4 confirmed |
+| 3 slow blinks, ~0.7 s each | countdown, get the stopwatch ready |
+| **solid ON** | the motors are driving — **start the stopwatch** |
+| off | the brake is on |
+| 2 slow blinks | run complete, the robot has stopped |
+
+Stop the stopwatch as the nose crosses the 5.00 m mark. Then measure how far
+the nose actually travelled, start line to where it stopped, and hand both
+numbers back:
+
+```python
+import max_speed_test
+max_speed_test.calibrate(travelled_mm=5060, stopwatch_s=10.4)
+```
+
+That prints two constants from one dash:
+
+**`MAX_WHEEL_SPEED_MMS`**, from the stopwatch over the marked 5 m. This is
+ground speed. It depends on nothing already in `config.py`, which is exactly why
+it is the reference every other number gets checked against.
+
+**An encoder verdict**, from the ticks over the distance really covered. Both
+constants it leans on are known: 1400 counts per revolution is fixed by the
+gearbox, and the wheel is a ruler-confirmed 32 mm. So the implied diameter
+should come back within a percent or two of 32.
+
+It moves opposite to the tick count, because it is `travelled × 1400 / ticks`:
+
+| Implied diameter | Meaning |
+|---|---|
+| ~32 mm | the encoder is honest, ticks are trustworthy |
+| above 32 | too few ticks. Dropped edges, this board's known fault |
+| below 32 | too many ticks. A wheel spun without carrying the robot |
+
+BT-7's ~1306 counts implies a 34.3 mm wheel and BT-8's ~66 mm track is 12%
+under the ruler. Both come off tick counts, both landed short, and a 32 mm wheel
+cannot roll as 34.3. Treat a repeat of that signature as a dead giveaway that
+the decoder is still losing edges.
+
+The tick half needs the encoders to read, which on this board they mostly do
+not. The dash and the stopwatch work regardless; the mode says so and carries on.
+
+Cross-check the speed against where the nose stopped. Short of the 5.2 m mark
+means `MAX_WHEEL_SPEED_MMS` is too high; past it, too low.
+
+Each run appends a row to `max_speed_test.csv` on the Pico
+(`power,assumed_speed_mms,target_distance_mm,commanded_s,measured_s,left_ticks,right_ticks`),
+and `calibrate()` appends its results as a comment beneath. Copy it off with
+`mpremote cp :max_speed_test.csv .`.
+
+From the REPL you can vary the dash without re-flashing:
+
+```python
+import max_speed_test
+max_speed_test.run()                    # 5.2 m at full duty
+max_speed_test.run(distance_mm=3000)    # shorter lane
+max_speed_test.run(power=0.55)          # at cruise duty instead
+```
+
+Note the acceleration bias: the robot starts from rest, so the time over the
+first metre includes the ramp-up and the derived speed reads low. For the top
+speed alone, start the robot about 0.5 m behind the start line and time only
+the marked 5 m.
+
+Beware the circular case. On the PC the sim both plans and simulates with
+`MAX_WHEEL_SPEED_MMS`, so `python3 main.py --maxspeed` always lands exactly on
+target. That checks the arithmetic and says nothing about the chassis.
+
+### 5.2 Stress test (mode 5)
+
+Twenty laps of the sprint, out and back, at a gentler duty. Forty legs turn a
+small per-move bias into something a tape measure can see, and twenty minutes of
+vibration is a far harder test of this board's intermittent encoders than any
+bench check.
+
+Defaults: 20 laps × 5000 mm at power 0.45. That is 200 m of travel and about
+**11 minutes 30 seconds**. Press either button between legs to abort.
+
+Before starting, mark the start pose properly: both wheel contact points AND a
+heading line. Without the heading mark half the result is unreadable.
+
+```python
+import max_speed_test
+max_speed_test.stress()                       # the default 20 laps
+max_speed_test.stress(laps=5)                 # a shorter first go
+max_speed_test.stress(turn_around=True)       # pivot instead of reversing
+```
+
+**What reversing cannot see.** Backing up along the same wheel-speed ratio
+retraces the arc exactly, so any error identical in both directions cancels. A
+7% distance-calibration error overshoots equally out and back and lands the
+robot on the start line anyway. This mode measures **asymmetry and randomness,
+not calibration**. `turn_around=True` pivots 180° instead, so every leg is a
+forward drive plus a turn, which is what a speed run is made of, and distance
+and turn errors accumulate. That is the harsher and more maze-relevant test.
+
+What to look for in the report:
+
+| Reading | What it means |
+|---|---|
+| Net displacement well off 0 | forward and reverse are not symmetric |
+| Net heading vs the floor mark | agreement means a real drive bias; disagreement means the ticks are lying |
+| Ticks per leg falling over the run | battery sag or a hot motor. Legs are a fixed DURATION, so fewer ticks is less distance, and a late-battery speed run undershoots |
+| `ENCODER DROPOUT` on a leg | the intermittent channel. This is the fault a soak run exists to catch |
+| Lateral offset from the line | the one thing only the tape can tell you |
+
+Every leg appends a row to `stress_test.csv`
+(`leg,direction,commanded_s,left_ticks,right_ticks,cum_left,cum_right,veer_deg`),
+so the per-leg trend survives even if the run is aborted.
+
+---
+
+## 6. Getting files off the Pico
+
+The robot writes `motor_log.csv` and `max_speed_test.csv` to its own
+filesystem. On the Pico `config.PACKAGE_DIR` is empty, so everything sits at the
+root and the remote path is just `:name.csv`.
+
+### With the VS Code extension (MicroPico 4.3.4)
+
+The download commands are hidden until you mount the board. Their `when` clause
+is `resourceScheme == pico`, so with the Virtual File System off you only ever
+see the upload half, which is why the extension looks write-only.
+
+1. Command palette → **MicroPico: Toggle Virtual File System**. It reloads the
+   window and closes any open vREPL.
+2. The board appears in the Explorer as a folder called **Mpy Remote
+   Workspace**. Open a file to read it in place, no copy needed.
+3. Right-click a file → **Download file from Pico**.
+
+That folder is **virtual**, backed by the `pico:` scheme. Nothing is created on
+disk and there is nothing to add to `.gitignore`; `find` and `git status` will
+both show you it does not exist. If it lists as empty, either the board really
+has no files or the extension has not finished connecting. `mpremote fs ls`
+settles which, but only once VS Code lets go of the port.
+
+**MicroPico: Download project from Pico** pulls everything in one go. It will
+overwrite your local `.py` files with whatever was last deployed, so use it on
+an empty folder or not at all.
+
+### With mpremote
+
+```bash
+mpremote devs                                   # which port the board is on
+mpremote fs ls                                  # what it has written
+mpremote cat :max_speed_test.csv                # read it without copying
+mpremote cp :max_speed_test.csv .               # pull one file
+mpremote cp :max_speed_test.csv :motor_log.csv .  # several at once
+mpremote rm :max_speed_test.csv                 # start a fresh baseline
+```
+
+Keep runs from overwriting each other by pulling into a dated folder:
+
+```bash
+mkdir -p runs/$(date +%F) && mpremote cp :max_speed_test.csv runs/$(date +%F)/
+```
+
+Four things that actually go wrong:
+
+**Only one program owns the serial port.** If the MicroPico extension is
+connected, `mpremote` fails with "it may be in use by another program".
+Disconnect in VS Code first, or just use the extension route above. Same for an
+open Thonny or an `mpremote repl` in another terminal. `lsof | grep usbmodem`
+names the process holding it.
+
+**`mpremote` interrupts whatever is running.** It drops the board into the raw
+REPL, so a `main.py` mid-run stops. That is usually what you want after a run,
+but do not do it while the robot is driving.
+
+**A log is only complete once it is closed.** `max_speed_test.csv` opens and
+closes per row, so it is safe to pull at any time. `motor_log.csv` stays open
+for the whole run and needs its `close()`, so pull it after the run ends, not
+during.
+
+**Do not `cp -r : .`** It would drag every `.py` on the board into the working
+directory and overwrite your source with whatever was last deployed.
+
+### Replaying a motor trace
 
 The Pico has no renderer, so replay the trace into the PC sim. A gap between
 where the replay ends and where the robot physically stopped **is the
@@ -161,9 +362,6 @@ measurement** of how wrong the motor model is — that is the tool's purpose.
 
 ```bash
 mpremote cp :motor_log.csv .
-```
-
-```bash
 python3 replay_log.py --render
 ```
 
@@ -221,6 +419,7 @@ corrected. Expect real drift.
 
 ```bash
 python3 tests/test_physics_sim.py
+python3 tests/test_max_speed_test.py
 ```
 
 Inline self-tests: `python3 maze.py`, `python3 explorer.py`,

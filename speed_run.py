@@ -80,7 +80,12 @@ def run_motion_for(duration_seconds, render_object=None, belief=None, route=None
         return
 
     dt = config.SIM_TIMESTEP_S
-    total_steps = max(1, round(duration_seconds / dt))
+    # Whole steps plus the leftover. Rounding to whole steps instead put a
+    # systematic error on every short move -- a 0.216 s pivot became 0.22 s and
+    # turned 91.6 degrees -- which would show up as sim/hardware divergence that
+    # the hardware had not actually caused.
+    total_steps = int(duration_seconds / dt)
+    remainder = duration_seconds - total_steps * dt
     for step_index in range(total_steps):
         setup.sim.step_sim_physics(dt)
         if render_object is not None and (
@@ -88,13 +93,32 @@ def run_motion_for(duration_seconds, render_object=None, belief=None, route=None
         ):
             render_object.draw(belief=belief, mouse=setup.sim.get_mouse_state(), path=route)
 
+    if remainder > 0.0:
+        setup.sim.step_sim_physics(remainder)
+
+
+def pivot_in_place(quarter_turns, clockwise=True, render_object=None, belief=None, route=None):
+    """Spin on the spot through `quarter_turns` x 90 degrees.
+
+    The power is FIXED at TURN_DUTY_POWER and only the duration scales with the
+    angle. Scaling both is what made a U-turn rotate 360 degrees: it drove at
+    2 x TURN_DUTY_POWER, so it spun twice as fast for the time a 180 needed at
+    the base rate. Corrected 2026-08-31.
+    """
+    pivot_rate_rads = 2.0 * TURN_DUTY_POWER * config.MAX_WHEEL_SPEED_MMS / config.TRACK_WIDTH_MM
+    pivot_time_seconds = (math.pi / 2.0) * quarter_turns / pivot_rate_rads
+
+    sign = 1.0 if clockwise else -1.0
+    drive_motors(sign * TURN_DUTY_POWER, -sign * TURN_DUTY_POWER)
+    run_motion_for(pivot_time_seconds, render_object, belief, route)
+    stop_motors()
+
 
 def execute_movement_commands(movement_commands, render_object=None, belief=None, route=None):
     """Execute egocentric movement verbs: F n, L, R, U, H."""
     print(f"Executing movement route: {movement_commands}")
 
     cruise_speed_mms = CRUISE_DUTY_POWER * config.MAX_WHEEL_SPEED_MMS
-    pivot_rate_rads = 2.0 * TURN_DUTY_POWER * config.MAX_WHEEL_SPEED_MMS / config.TRACK_WIDTH_MM
 
     for command_string in movement_commands:
         if not command_string or command_string.startswith("#"):
@@ -114,17 +138,16 @@ def execute_movement_commands(movement_commands, render_object=None, belief=None
             stop_motors()
 
         elif verb in ("L", "R", "U"):
+            # quarter turns, and which way round. A U-turn takes the same
+            # direction as R; on the spot either way lands the same heading.
             if verb == "L":
-                turn_direction = -1.0
+                quarter_turns, clockwise = 1, False
             elif verb == "R":
-                turn_direction = 1.0
+                quarter_turns, clockwise = 1, True
             else:
-                turn_direction = 2.0
+                quarter_turns, clockwise = 2, True
 
-            pivot_time_seconds = (math.pi / 2.0) * abs(turn_direction) / pivot_rate_rads
-            drive_motors(turn_direction * TURN_DUTY_POWER, -turn_direction * TURN_DUTY_POWER)
-            run_motion_for(pivot_time_seconds, render_object, belief, route)
-            stop_motors()
+            pivot_in_place(quarter_turns, clockwise, render_object, belief, route)
 
         elif verb == "H":
             stop_motors()

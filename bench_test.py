@@ -1,6 +1,6 @@
 """Hardware bench tests for the UKMARS Gemini chassis (Pico / MicroPython only).
 
-This is the bring-up checklist from HANDOFF.md turned into runnable code. It
+This is the hardware bring-up checklist turned into runnable code. It
 produces BENCH EVIDENCE: every check ends in a recorded PASS/FAIL/value that
 `summary()` prints as one paste-back block. Sim-green proves nothing here.
 
@@ -61,9 +61,9 @@ SETTLE_MS = 300              # let a wheel come to rest before reading counts (m
 # quadrature jitter, well below one hand-roll revolution (~1400 ticks).
 MOVED_TICKS = 20
 
-# Encoder A/B pins (left = 8/9, right = 6/7)
-LEFT_ENC_A, LEFT_ENC_B = 8, 9
-RIGHT_ENC_A, RIGHT_ENC_B = 6, 7
+# Encoder A/B pins. Defined in setup.py, the hardware boundary, not here.
+LEFT_ENC_A, LEFT_ENC_B = setup.LEFT_ENCODER_A, setup.LEFT_ENCODER_B
+RIGHT_ENC_A, RIGHT_ENC_B = setup.RIGHT_ENCODER_A, setup.RIGHT_ENCODER_B
 
 # Emitter settle time before reading the lit ADC value (ms). The phototransistor
 # needs the LED to actually be on; reading too early samples the unlit state.
@@ -101,7 +101,7 @@ def summary():
     for check_id, outcome, detail in RESULTS:
         print("{:<22} {:<6} {}".format(check_id, outcome, detail))
     print("=======================================================")
-    print("Paste this into LOG.md / the session notes.")
+    print("Paste this into today's Logs/ entry.")
 
 
 def reset_results():
@@ -221,14 +221,12 @@ _encoder_error = None
 
 
 def _get_encoders():
-    """Construct the PIO quadrature decoder once; None if it is unavailable."""
+    """The quadrature decoder, via the boundary; None if it is unavailable."""
     global _encoders, _encoder_error
     if _encoders is None and _encoder_error is None:
-        try:
-            from diagnostic_encoders import Encoders
-            _encoders = Encoders()
-        except Exception as exc:  # ImportError on PC, PIO claim failure on Pico
-            _encoder_error = str(exc)
+        _encoders = setup.get_encoders()
+        if _encoders is None:
+            _encoder_error = setup.encoder_error
             print("  !! encoders unavailable: {}".format(_encoder_error))
     return _encoders
 

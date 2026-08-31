@@ -60,6 +60,14 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
    * Drives the mouse through the movement sequence.
 3. **Mode 3: Bench Test Mode (`--bench`)**:
    * Runs bringing-up hardware checks end-to-end (`bench_test.py`).
+4. **Mode 4: Max Speed Test (`--maxspeed`)**:
+   * Drives one straight dash at full duty over a marked distance (5.2 m by default), then brakes hard.
+   * The LED goes solid for the whole drive, so a stopwatch can time a marked 5 m. See `CHEATSHEET.md` §5.1.
+   * Captures the encoder ticks either side of the dash. `calibrate(travelled_mm, stopwatch_s)` yields `MAX_WHEEL_SPEED_MMS` from the stopwatch, and checks the decoder against the ruler-confirmed wheel: an implied diameter above 32 mm means edges are being dropped.
+5. **Mode 5: Stress Test (`--stress`)**:
+   * N laps of the sprint (default 20 × 5 m, ~11 min), reversing between legs, then reports accumulated drift.
+   * Reversing cancels symmetric error, so it measures asymmetry, encoder dropout and battery sag. `turn_around=True` pivots 180° instead, letting distance and turn error accumulate.
+   * Either button aborts between legs.
 
 ---
 
@@ -68,7 +76,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | File | Purpose |
 | :--- | :--- |
 | **`main.py`** | Top-level entry point. Handles button state checks, mode selection, exploration loop, and command execution. |
-| **`setup.py`** | Hardware pin definitions for motors, reflective sensors, and buttons. |
+| **`setup.py`** | Hardware pin definitions for motors, reflective sensors, buttons and encoders, plus `read_encoders()`. The single platform boundary. |
 | **`sim_machine.py`** | Desktop mock MicroPython `machine` module (`Pin`, `PWM`, `ADC`) for PC simulation. |
 | **`config.py`** | Single source of truth for physical scale ($180\text{mm}$ cells, wheel diameter, track width), timing, and file paths. |
 | **`maze.py`** | `MazeStructure` class and `.num` file reader (`num_file_import`) / writer (`num_file_export`). |
@@ -78,7 +86,8 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`search_algorithms.py`** | Pure flood-fill distance transform and greedy descent pathfinding. |
 | **`renderer.py`** | Optional Pygame rendering engine for visualizing maze state, discovery, and path planning. |
 | **`commands.py`** | Translates absolute cell routes into egocentric relative commands (`F n`, `L`, `R`, `U`, `H`). |
-| **`diagnostic_encoders.py`** | MicroPython PIO quadrature encoder counter class for hardware motor encoders. |
+| **`diagnostic_encoders.py`** | PIO quadrature encoder counter for the hardware motor encoders. Takes its pins from `setup.py` and is reached through `setup.read_encoders()`, never imported directly. |
+| **`max_speed_test.py`** | Mode 4. One straight dash at full duty over a marked distance, plus `calibrate()` to turn the tape and stopwatch into `MAX_WHEEL_SPEED_MMS` and `WHEEL_DIAMETER_MM`. |
 | **`groundtruth.num`** | Default ground-truth maze fixture used by PC simulation. |
 
 ---
