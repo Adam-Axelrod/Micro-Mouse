@@ -1,5 +1,4 @@
 """Differential-drive mouse physics simulation and reflective sensor phototransistor model.
-
 Provides continuous kinematics integration (MouseState) and distance-to-ADC light intensity
 mapping for the simulated reflective sensors.
 """
@@ -23,11 +22,7 @@ class MouseState:
         self.heading_radians = start_heading_radians
         self.left_encoder_ticks = 0
         self.right_encoder_ticks = 0
-        # Exact wheel travel in mm. Ticks are derived from these totals rather
-        # than accumulated per step: rounding each step's increment discards the
-        # residual in a correlated direction, which is a systematic drift, not
-        # noise (~0.5% of distance travelled).
-        self._left_travel_mm = 0.0
+        self._left_travel_mm = 0.0 # Exact wheel travel in mm. Using ticks to calculate travel creates systematic drift.
         self._right_travel_mm = 0.0
 
     def reset_pose(self, x_mm, y_mm, heading_radians):
@@ -63,11 +58,9 @@ class MouseState:
         # Keep heading within [0, 2*pi)
         self.heading_radians = self.heading_radians % (2.0 * math.pi)
 
-        # Accumulate exact travel, then derive ticks from the running total so the
-        # rounding residual never compounds.
-        self._left_travel_mm += left_wheel_speed_mms * delta_time_seconds
+        self._left_travel_mm += left_wheel_speed_mms * delta_time_seconds 
         self._right_travel_mm += right_wheel_speed_mms * delta_time_seconds
-        self.left_encoder_ticks = round(self._left_travel_mm / config.MM_PER_TICK)
+        self.left_encoder_ticks = round(self._left_travel_mm / config.MM_PER_TICK) # Derive ticks from running total travel
         self.right_encoder_ticks = round(self._right_travel_mm / config.MM_PER_TICK)
 
     def sensor_position_and_angle(self, sensor_name):
@@ -91,8 +84,7 @@ class MouseState:
     def read_sensor_adc(self, sensor_name, wall_segments):
         """Cast ray for sensor_name and convert distance to 16-bit ADC light intensity."""
         origin, angle = self.sensor_position_and_angle(sensor_name)
-        distance_mm = cast_ray(origin, angle, wall_segments,
-                               max_range_mm=config.SENSOR_RANGE_MM)
+        distance_mm = cast_ray(origin, angle, wall_segments, max_range_mm=config.SENSOR_RANGE_MM)
 
         # Phototransistor reflectance model: intensity = K / (d + d0)^2
         if distance_mm >= config.SENSOR_BACKGROUND_MM:

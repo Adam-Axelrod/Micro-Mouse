@@ -6,10 +6,10 @@ import config
 import maze
 import geometry
 
-### Renderer Class-----------------------------------------------------------------------------------
+### Renderer Class
 
 class Renderer:
-    #receives MazeGeometry object with a nested true MazeStructure and a belief MazeStructure
+    # receives MazeGeometry object with a nested true MazeStructure and a belief MazeStructure
     def __init__(self, maze):
         pygame.init()
         self.maze = maze
@@ -26,9 +26,9 @@ class Renderer:
                 self.close()
                 raise SystemExit
 
-        self.screen.fill((0,0,0)) # Will repalce with config nums later
+        self.screen.fill((0,0,0)) # Will repalce with config nums later ie config.BLACK
 
-        for post in self.maze.posts.values(): #unconditionally draw in all posts
+        for post in self.maze.posts.values(): # Unconditionally draw in all posts
             rect = self._rect_from_corners(post)
             pygame.draw.rect(self.screen, (255,255,255), rect)
 
@@ -138,7 +138,7 @@ class Renderer:
     def close(self):
         pygame.quit()
 
-### Test --------------------------------------------------------------------------------------------
+### Test
 
 if __name__ == "__main__":
     maze_struct = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE)) # gen maze struct from file
