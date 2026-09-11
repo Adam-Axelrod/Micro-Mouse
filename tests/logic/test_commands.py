@@ -225,7 +225,46 @@ def test_turn_heading_wraps_the_compass():
     print("✓ test_turn_heading_wraps_the_compass passed")
 
 
+def test_a_return_leg_closes_any_walkable_route():
+    """A U-turn, the path backwards, a U-turn home: the cell and the heading close."""
+    open_route = ["F 2", "R", "F 2", "R", "F 2", "R", "F 1", "R", "F 1", "H"]
+    start = (0, 0, "n")
+    lap = commands.with_return_leg(open_route, start)
+    assert commands.returns_to_start(lap, start), lap
+    assert commands.net_quarter_turns(lap) % 4 == 0, lap
+    assert not commands.leaves_the_grid(lap, start, (3, 3)), lap
+    print("✓ test_a_return_leg_closes_any_walkable_route passed")
+
+
+def test_a_return_leg_walks_the_same_cells_in_reverse():
+    out = ["F 2", "R", "F 1", "H"]
+    start = (0, 0, "n")
+    there = commands.cell_path(out, start)
+    lap = commands.cell_path(commands.with_return_leg(out, start), start)
+    assert lap == there + list(reversed(there))[1:], lap
+    print("✓ test_a_return_leg_walks_the_same_cells_in_reverse passed")
+
+
+def test_a_return_leg_ends_with_a_halt_and_only_known_verbs():
+    lap = commands.with_return_leg(["F 1", "R", "F 1", "H"], (0, 0, "n"))
+    assert lap[-1] == commands.HALT, lap
+    assert lap.count(commands.HALT) == 1, lap
+    for verb in lap:
+        assert verb.split()[0] in (commands.FORWARD,) + commands.VERBS_WITHOUT_ARG, verb
+    print("✓ test_a_return_leg_ends_with_a_halt_and_only_known_verbs passed")
+
+
+def test_cell_path_drops_the_cell_a_turn_repeats():
+    path = commands.cell_path(["F 1", "R", "F 1", "H"], (0, 0, "n"))
+    assert path == [(0, 0), (0, 1), (1, 1)], path
+    print("✓ test_cell_path_drops_the_cell_a_turn_repeats passed")
+
+
 TESTS = [
+    test_a_return_leg_closes_any_walkable_route,
+    test_a_return_leg_walks_the_same_cells_in_reverse,
+    test_a_return_leg_ends_with_a_halt_and_only_known_verbs,
+    test_cell_path_drops_the_cell_a_turn_repeats,
     test_walk_route_reports_every_cell_in_order,
     test_walk_route_stops_at_halt,
     test_a_route_can_close_in_heading_and_not_in_position,

@@ -113,6 +113,43 @@ def returns_to_start(movement_commands, start_pose):
     return walk_route(movement_commands, start_pose)[-1] == tuple(start_pose)
 
 
+def cell_path(movement_commands, start_pose):
+    """The cells a route visits, consecutive duplicates dropped.
+
+    `walk_route` emits a pose per verb, so a turn repeats the cell it turns in.
+    A path needs the cells alone.
+    """
+    cells = []
+    for x, y, _heading in walk_route(movement_commands, start_pose):
+        if not cells or cells[-1] != (x, y):
+            cells.append((x, y))
+    return cells
+
+
+def with_return_leg(movement_commands, start_pose):
+    """The route, a U-turn, the route walked backwards, and a U-turn home.
+
+    Any walkable route closes this way, which is what makes an open route lappable
+    without redrawing it. The cell path is reversed and re-translated rather than
+    the verbs being inverted by hand, so one implementation derives every turn.
+
+    Know what it cannot measure. Retracing a path cancels its own symmetric error:
+    an equal shortfall each way subtracts, and every right turn going out is a left
+    turn coming back. What accumulates is the two U-turns. A route that closes on
+    its own geometry is the stronger drift test.
+    """
+    path = cell_path(movement_commands, start_pose)
+    end_heading = walk_route(movement_commands, start_pose)[-1][2]
+    turned_about = config.OPPOSITE[end_heading]
+
+    out_verbs = [verb for verb in movement_commands
+                 if verb.strip() and not verb.startswith("#") and verb.split()[0] != HALT]
+    back_verbs = path_to_commands(list(reversed(path)), start_heading=turned_about)
+    back_verbs = [verb for verb in back_verbs if verb.split()[0] != HALT]
+
+    return out_verbs + [UTURN] + back_verbs + [UTURN, HALT]
+
+
 def leaves_the_grid(movement_commands, start_pose, grid):
     """Cells the route visits that do not exist on a `grid` = (cols, rows)."""
     cols, rows = grid

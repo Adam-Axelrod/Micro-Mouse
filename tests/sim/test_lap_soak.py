@@ -113,7 +113,28 @@ def test_a_closed_route_returns_the_sim_mouse_to_its_start_cell():
     print("✓ test_a_closed_route_returns_the_sim_mouse_to_its_start_cell passed")
 
 
+def test_a_retrace_makes_an_open_route_lappable():
+    path = write_route(OPEN_ROUTE)
+    soak_log_path()
+    assert speed_run.soak(laps=3, route_path=path, retrace=True) is not None
+    assert len(lap_rows(config.SOAK_LOG_PATH)) == 3
+    print("✓ test_a_retrace_makes_an_open_route_lappable passed")
+
+
+def test_a_retraced_lap_returns_the_sim_mouse_to_its_start_cell():
+    path = write_route(OPEN_ROUTE)
+    soak_log_path()
+    speed_run.soak(laps=2, route_path=path, retrace=True)
+    state = setup.sim.get_mouse_state()
+    offset_mm = ((state.x_mm - 0.5 * config.MM_PER_CELL) ** 2
+                 + (state.y_mm - 0.5 * config.MM_PER_CELL) ** 2) ** 0.5
+    assert offset_mm < 1.0, offset_mm
+    print("✓ test_a_retraced_lap_returns_the_sim_mouse_to_its_start_cell passed")
+
+
 TESTS = (
+    test_a_retrace_makes_an_open_route_lappable,
+    test_a_retraced_lap_returns_the_sim_mouse_to_its_start_cell,
     test_a_route_that_does_not_return_to_its_start_cell_is_refused,
     test_one_lap_of_that_same_route_still_drives,
     test_a_route_that_leaves_its_own_grid_is_refused,

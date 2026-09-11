@@ -341,9 +341,18 @@ speed_run.soak()                  # the default 30 laps of route.mmc
 speed_run.soak(laps=5)            # a shorter first go
 speed_run.soak(power=0.30)        # slower still
 speed_run.soak(route_path="routes/lap3x3_via_centre.mmc")
+speed_run.soak(retrace=True)      # drive an open route out and back
 ```
 
-**It refuses a route that does not close.** Thirty laps of a route ending two
+**An open route can be driven out and back.** `--retrace` (or `retrace=True`)
+appends a U-turn, the path walked backwards, and a U-turn home, so any drawn route
+becomes lappable without redrawing it. Know what it costs: retracing cancels its
+own symmetric error, because an equal shortfall each way subtracts and every right
+turn going out is a left turn coming back. The two U-turns per lap are what
+accumulates, so a retrace lap chiefly measures the pivot. A route that closes on
+its own geometry measures distance, turns and pivots together.
+
+**Otherwise it refuses a route that does not close.** Thirty laps of a route ending two
 cells from its start drives into a wall on lap 2, so mode 5 walks the verbs on the
 grid first and will not arm the motors. It prints the cell and heading the route
 really ends on. The saved editor route is the common case: four right turns close

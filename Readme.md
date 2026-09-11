@@ -95,6 +95,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
    * Drives the route in `route.mmc` 30 times at a gentler duty than a speed run (0.40), and appends one row per lap to `lap_soak.csv`.
    * Each row carries the ticks, the per-lap tick deltas, the heading residual against what the route commanded, and both halves of each light sensor reading. The light columns are for the wall-distance work still to come: the same pose read thirty times says how repeatable the sensors are.
    * Refuses more than one lap of a route that does not return to its start **cell and heading**, because lap 2 would set off from the wrong square. `commands.walk_route` vets it before the motors arm.
+   * `--retrace` closes an open route instead: a U-turn, the path walked backwards, a U-turn home. It cancels its own symmetric error (equal shortfall each way, right turns becoming left turns), so it measures the pivot above all -- `commands.with_return_leg` says so at the call site.
    * The report looks for what only a long run shows: a heading residual of one sign every lap (a mistimed turn), a falling tick count (battery sag), a lap far below the median (an encoder dropout). Either button aborts between laps. See `CHEATSHEET.md` §5.2.
 6. **Mode 6: Follow Route (`--follow`)**:
    * Drives a hand-authored `.mmc` verbatim, so the planner is not a suspect if the robot ends up in the wrong place. `--route=`, `--map=` and `--laps=` select the file, the world and the lap count.

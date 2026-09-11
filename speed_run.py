@@ -146,7 +146,7 @@ def _place_sim_mouse(start_pose):
         config.HEADING_RADIANS[heading])
 
 
-def _load_route(route_path, laps):
+def _load_route(route_path, laps, retrace=False):
     """Parse and vet a route file. Returns (verbs, header), or None to refuse.
 
     Parsing and validation happen BEFORE the motors are armed: a malformed or
@@ -177,14 +177,28 @@ def _load_route(route_path, laps):
                 header["grid"][0], header["grid"][1], outside[0]))
             return None
 
-    if laps > 1 and not commands.returns_to_start(movement_commands, start_pose):
+    closes = commands.returns_to_start(movement_commands, start_pose)
+
+    if retrace and not closes:
+        movement_commands = commands.with_return_leg(movement_commands, start_pose)
+        print("RETRACING: U-turn at the end, the path walked backwards, U-turn home.")
+        print("  Lap is now {} verbs: {}".format(len(movement_commands), movement_commands))
+        print("  A retrace cancels its own symmetric error -- an equal shortfall each")
+        print("  way subtracts, and every right turn out is a left turn back. The two")
+        print("  U-turns are what accumulates, so this measures pivots above all.")
+        closes = commands.returns_to_start(movement_commands, start_pose)
+    elif retrace:
+        print("Route already returns to its start pose; no return leg added.")
+
+    if laps > 1 and not closes:
         end_x, end_y, end_heading = commands.walk_route(movement_commands, start_pose)[-1]
         print("REFUSING: {} laps, but this route does not close.".format(laps))
         print("  It starts at ({}, {}) facing {} and ends at ({}, {}) facing {}.".format(
             start_pose[0], start_pose[1], start_pose[2], end_x, end_y, end_heading))
         print("  Lap 2 would set off from the wrong cell and drive into a wall.")
-        print("  Extend the route back to its start cell, or use {}/lap3x3.mmc."
-              .format(config.ROUTES_DIR))
+        print("  Three ways on: pass retrace=True (--retrace) to drive it out and")
+        print("  back, extend the route to its start cell in the editor, or use")
+        print("  {}/lap3x3_via_centre.mmc.".format(config.ROUTES_DIR))
         return None
 
     return movement_commands, header
@@ -254,7 +268,8 @@ def _abort_requested(seconds):
 
 
 def follow(route_path=None, map_path=None, laps=None, enable_render=False,
-           log_path=None, sample_light=False, power=None, turn_power=None):
+           log_path=None, sample_light=False, power=None, turn_power=None,
+           retrace=False):
     """Mode 6. Drive a hand-authored .mmc route verbatim, `laps` times.
 
     No planning happens here. The route comes from a file, so this exercises the
@@ -268,6 +283,9 @@ def follow(route_path=None, map_path=None, laps=None, enable_render=False,
     With `log_path` every lap is appended to that CSV, and `power` drives the
     whole route slower than a speed run. That is mode 5: see `soak()` below, which
     is this function with the soak defaults.
+
+    `retrace` closes an open route by driving it out and back instead of refusing
+    it. Read `commands.with_return_leg` before trusting what that measures.
     """
     if route_path is None:
         route_path = config.SAVED_ROUTE
@@ -275,7 +293,7 @@ def follow(route_path=None, map_path=None, laps=None, enable_render=False,
         laps = config.FOLLOW_ROUTE_LAPS
 
     print("=== STARTING FOLLOW ROUTE MODE ===")
-    vetted = _load_route(route_path, laps)
+    vetted = _load_route(route_path, laps, retrace)
     if vetted is None:
         return None
     movement_commands, header = vetted
@@ -345,7 +363,8 @@ def follow(route_path=None, map_path=None, laps=None, enable_render=False,
     return movement_commands
 
 
-def soak(laps=None, route_path=None, map_path=None, enable_render=False, power=None):
+def soak(laps=None, route_path=None, map_path=None, enable_render=False, power=None,
+         retrace=False):
     """Mode 5. Drive the saved route `laps` times over, logging every lap.
 
     The same motion as mode 6, run long and recorded. Thirty laps of a 3x3
@@ -379,7 +398,8 @@ def soak(laps=None, route_path=None, map_path=None, enable_render=False, power=N
     print("Press either button between laps to abort.")
     return follow(route_path=route_path, map_path=map_path, laps=laps,
                   enable_render=enable_render, log_path=config.SOAK_LOG_PATH,
-                  sample_light=True, power=power, turn_power=turn_power)
+                  sample_light=True, power=power, turn_power=turn_power,
+                  retrace=retrace)
 
 
 def _print_lap(record):

@@ -51,8 +51,8 @@ MODES = [
     ("Speed Run", speed_run.run, ()),
     ("Bench Test", run_bench, ()),
     ("Max Speed Test", max_speed_test.run, ()),
-    ("Lap Soak", speed_run.soak, ("laps", "route_path", "map_path", "power")),
-    ("Follow Route", speed_run.follow, ("route_path", "map_path", "laps")),
+    ("Lap Soak", speed_run.soak, ("laps", "route_path", "map_path", "power", "retrace")),
+    ("Follow Route", speed_run.follow, ("route_path", "map_path", "laps", "retrace")),
 ]
 
 # CLI overrides, so a headless PC run does not need a button. Index into MODES.
@@ -75,6 +75,12 @@ CLI_OPTIONS = {
     "--power": ("power", float),
 }
 
+# Bare on/off flags, mapped the same way. Kept apart from CLI_OPTIONS because they
+# carry no value: `--retrace=True` is not a thing anyone should have to type.
+CLI_SWITCHES = {
+    "--retrace": "retrace",
+}
+
 
 def blink_led(times, on_duration_ms=100, off_duration_ms=None):
     """Kept as an alias so REPL habits and bench_test keep working."""
@@ -82,8 +88,11 @@ def blink_led(times, on_duration_ms=100, off_duration_ms=None):
 
 
 def cli_options(argv, accepted):
-    """The `--name=value` options this mode accepts, parsed from argv."""
+    """The options this mode accepts, parsed from argv."""
     options = {}
+    for flag, keyword in CLI_SWITCHES.items():
+        if flag in argv and keyword in accepted:
+            options[keyword] = True
     for arg in argv:
         for flag, (keyword, cast) in CLI_OPTIONS.items():
             if arg.startswith(flag + "=") and keyword in accepted:
