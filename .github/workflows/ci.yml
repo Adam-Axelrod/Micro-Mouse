@@ -10,10 +10,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    working-directory: Micro-Mouse
-
 env:
   # The renderer tests open a real display; a runner has no screen.
   SDL_VIDEODRIVER: dummy
@@ -32,7 +28,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: Micro-Mouse/requirements.txt
+          cache-dependency-path: requirements.txt
       - run: pip install -r requirements.txt
       - run: python tests/run_all.py
 
@@ -58,7 +54,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: Micro-Mouse/requirements.txt
+          cache-dependency-path: requirements.txt
       - run: pip install -r requirements.txt
 
       - name: Every mode the PC can run
