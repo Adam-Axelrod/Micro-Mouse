@@ -109,7 +109,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`maze.py`** | `MazeStructure` class and `.num` file reader (`num_file_import`) / writer (`num_file_export`). |
 | **`explorer.py`** | Pure `Explorer` class that manages belief maps and steps between cells. |
 | **`search_algorithms.py`** | Pure flood-fill distance transform and greedy descent pathfinding, plus `route_is_open` (the replan trigger). |
-| **`commands.py`** | Translates absolute cell routes into egocentric relative commands (`F n`, `L`, `R`, `U`, `H`) and writes the `.mmc` route file. |
+| **`commands.py`** | Translates absolute cell routes into egocentric relative commands (`F n`, `L`, `R`, `U`, `H`), and reads and writes the `.mmc` route file, header included. |
 | **`exploration.py`** | Mode 1. Cell-by-cell exploration loop. Simulation only -- see section 2. |
 | **`speed_run.py`** | Mode 2. Loads a belief, plans over it, and executes the verbs as timed open-loop drives. Owns the route, not the motors. |
 | **`bench_test.py`** | Mode 3. The BT-0..BT-8 hardware bring-up checks. Imported lazily by `main.py`; not in the minimal deployment set. |
@@ -128,7 +128,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`sim/geometry.py`** | `MazeGeometry` mm-space wall segments and post polygons, and the `cast_ray()` engine. |
 | **`sim/renderer.py`** | Optional Pygame renderer, plus `make_renderer()` so no mode has to import another mode in order to draw. |
 | **`sim/replay_log.py`** | Re-drives the sim from a Pico `motor_log.csv`. The gap between the replayed pose and where the robot really stopped is the measurement. |
-| **`sim/route_editor.py`** | Draw a route by clicking cells; writes `.mmc`. Refuses a step that is not adjacent or that crosses a wall. |
+| **`sim/route_editor.py`** | Draw a route by clicking cells on any grid size; writes `.mmc` with the start pose and goal in its header. Refuses a step that is not adjacent or that crosses a wall. |
 
 ---
 

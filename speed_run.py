@@ -95,19 +95,43 @@ def load_and_plan_route(belief_file_path=None, start_heading=config.DIRECTIONS[0
     return optimal_route, movement_commands, discovered_maze
 
 
-def _sim_world(map_path=None, enable_render=False):
+def _sim_world(map_path=None, enable_render=False, grid=None, start_pose=None):
     """Load the maze the sim and the renderer should use.
 
     Returns (render_object, real_maze); either may be None. The maze comes back
     as well as the renderer because a caller with no belief map of its own still
     has to give the renderer something to draw.
+
+    With no map file but a `grid`, the world is a blank grid of that size. A
+    hand-drawn 3x3 route has no maze file behind it, and drawing it on the 16x16
+    default would put the mouse in the wrong world entirely.
     """
     if not (HAS_SIM or enable_render):
         return None, None
-    real_maze = maze.MazeStructure(*maze.num_file_import(map_path or config.DEFAULT_MAZE))
+    if map_path:
+        real_maze = maze.MazeStructure(*maze.num_file_import(map_path))
+    elif grid:
+        real_maze = maze.MazeStructure(cols=grid[0], rows=grid[1])
+    else:
+        real_maze = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE))
     if HAS_SIM:
         setup.sim.set_sim_maze(real_maze)
+        if start_pose is not None:
+            _place_sim_mouse(start_pose)
     return (make_renderer(real_maze) if enable_render else None), real_maze
+
+
+def _place_sim_mouse(start_pose):
+    """Put the simulated mouse in the middle of `start_pose`'s cell, facing it.
+
+    The sim always begins at (0, 0) facing north. A route drawn from anywhere
+    else would replay from the wrong square, which looks like a drive bug.
+    """
+    x, y, heading = start_pose
+    setup.sim.get_mouse_state().reset_pose(
+        (x + 0.5) * config.MM_PER_CELL,
+        (y + 0.5) * config.MM_PER_CELL,
+        config.HEADING_RADIANS[heading])
 
 
 def follow(route_path=None, map_path=None, laps=None, enable_render=False):
@@ -136,8 +160,10 @@ def follow(route_path=None, map_path=None, laps=None, enable_render=False):
     # Parsed and validated BEFORE the motors are armed: a malformed route must
     # fail at the file, not halfway down a corridor.
     movement_commands = commands.read_command_file(route_path)
+    header = commands.read_route_header(route_path)
     print("Route: {} ({} verbs) x {} lap(s)".format(route_path, len(movement_commands), laps))
     print("Verbs: {}".format(movement_commands))
+    _report_route_pose(header)
 
     if laps > 1 and not commands.closes_the_loop(movement_commands):
         print("WARNING: this route ends {} quarter turn(s) off its start heading.".format(
@@ -148,7 +174,9 @@ def follow(route_path=None, map_path=None, laps=None, enable_render=False):
     drive.start_trace()
     drive.blink_led(6, 80)
 
-    render_object, real_maze = _sim_world(map_path, enable_render)
+    render_object, real_maze = _sim_world(map_path, enable_render,
+                                          grid=header.get("grid"),
+                                          start_pose=header.get("start"))
 
     ticks_before = setup.read_encoders(reset=True)
     if ticks_before is None:
@@ -171,6 +199,27 @@ def follow(route_path=None, map_path=None, laps=None, enable_render=False):
     drive.stop_motors()
     _report_drift(laps, movement_commands)
     return movement_commands
+
+
+def _report_route_pose(header):
+    """Say where the robot has to be placed before this route means anything.
+
+    .mmc verbs are egocentric, so the route is only correct from the pose it was
+    drawn from. A file written before the header existed says nothing, and the
+    operator is told that rather than given a guess.
+    """
+    if "start" not in header:
+        print("Route carries no start pose. Place the robot in cell {} facing {}"
+              .format(config.START_POS, config.ROUTE_EDITOR_START_HEADING))
+        print("  (the assumed default) or redraw the route to record one.")
+        return
+    x, y, heading = header["start"]
+    print("Place the robot in cell ({}, {}) facing {}.".format(x, y, heading))
+    if "goal" in header:
+        print("  It should finish in cell {}.".format(header["goal"]))
+    if "grid" in header:
+        print("  Drawn on a {}x{} grid ({}).".format(
+            header["grid"][0], header["grid"][1], header.get("maze", "unnamed")))
 
 
 def _report_drift(laps, movement_commands):

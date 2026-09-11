@@ -67,13 +67,68 @@ def closes_the_loop(movement_commands):
     return net_quarter_turns(movement_commands) % 4 == 0
 
 
-def render_command_file(movement_commands, maze_name=None):
-    """Render movement commands as line-oriented text string."""
+# Route file header. The verbs are egocentric, so the same verb list drives a
+# different shape from a different start pose, and a grid that is not 16x16 has
+# no centre convention to fall back on. The header carries the pose the route was
+# drawn from so the operator knows where to place the robot and the sim can put
+# the mouse in the same spot. Comment lines, so a reader that ignores them still
+# gets the right verbs.
+HEADER_MAZE = "# maze:"
+HEADER_GRID = "# grid:"
+HEADER_START = "# start:"
+HEADER_GOAL = "# goal:"
+
+
+def render_command_file(movement_commands, maze_name=None, grid=None,
+                        start=None, goal=None):
+    """Render movement commands as line-oriented text string.
+
+    `grid` is (cols, rows), `start` is (x, y, heading), `goal` is (x, y).
+    """
     lines = ["# micromouse route v1"]
     if maze_name:
-        lines.append(f"# maze: {maze_name}")
+        lines.append(f"{HEADER_MAZE} {maze_name}")
+    if grid:
+        lines.append(f"{HEADER_GRID} {grid[0]}x{grid[1]}")
+    if start:
+        lines.append(f"{HEADER_START} {start[0]} {start[1]} {start[2]}")
+    if goal:
+        lines.append(f"{HEADER_GOAL} {goal[0]} {goal[1]}")
     lines.extend(movement_commands)
     return "\n".join(lines) + "\n"
+
+
+def parse_route_header(text):
+    """Read the header comments of a .mmc into a dict. Missing keys are absent.
+
+    A file written before the header existed yields {}, which every caller must
+    treat as "unknown pose", not as (0, 0) facing north.
+    """
+    header = {}
+    for raw_line in text.split("\n"):
+        line = raw_line.strip()
+        if not line.startswith("#"):
+            continue
+        if line.startswith(HEADER_MAZE):
+            header["maze"] = line[len(HEADER_MAZE):].strip()
+        elif line.startswith(HEADER_GRID):
+            cols, _, rows = line[len(HEADER_GRID):].strip().partition("x")
+            header["grid"] = (int(cols), int(rows))
+        elif line.startswith(HEADER_START):
+            x, y, heading = line[len(HEADER_START):].split()
+            if heading not in config.DIRECTIONS:
+                raise ValueError(f"'{heading}' is not a compass heading")
+            header["start"] = (int(x), int(y), heading)
+        elif line.startswith(HEADER_GOAL):
+            x, y = line[len(HEADER_GOAL):].split()
+            header["goal"] = (int(x), int(y))
+    return header
+
+
+def read_route_header(path_str):
+    """Header dict of a .mmc file on disk."""
+    with open(path_str, "r") as file_handle:
+        return parse_route_header(file_handle.read())
 
 
 VERBS_WITHOUT_ARG = (LEFT, RIGHT, UTURN, HALT)
@@ -124,11 +179,15 @@ def read_command_file(path_str):
         return parse_command_file(file_handle.read())
 
 
-def write_command_file(route, out_path_str, start_heading=config.DIRECTIONS[0], maze_name=None):
+def write_command_file(route, out_path_str, start_heading=config.DIRECTIONS[0],
+                       maze_name=None, grid=None):
     """Convert route to commands and write to text file."""
     movement_commands = path_to_commands(route, start_heading)
     with open(out_path_str, "w") as file_handle:
-        file_handle.write(render_command_file(movement_commands, maze_name))
+        file_handle.write(render_command_file(
+            movement_commands, maze_name, grid,
+            start=(route[0][0], route[0][1], start_heading),
+            goal=route[-1]))
     return movement_commands
 
 
@@ -140,8 +199,13 @@ if __name__ == "__main__":
 
     # Render and parse must round-trip: what the route editor writes is exactly
     # what the follow-route mode reads back.
-    rendered = render_command_file(cmds, maze_name="selftest.num")
+    rendered = render_command_file(cmds, maze_name="selftest.num", grid=(3, 3),
+                                   start=(0, 0, "n"), goal=(2, 2))
     assert parse_command_file(rendered) == cmds, parse_command_file(rendered)
+    header = parse_route_header(rendered)
+    assert header == {"maze": "selftest.num", "grid": (3, 3),
+                      "start": (0, 0, "n"), "goal": (2, 2)}, header
+    assert parse_route_header(render_command_file(cmds)) == {}
 
     for bad, why in (("F", "F with no count"), ("F 0", "a move of zero cells"),
                      ("F x", "a non-numeric count"), ("R 2", "a turn with an argument"),

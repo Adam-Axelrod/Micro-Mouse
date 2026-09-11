@@ -7,6 +7,18 @@ import config
 import maze
 from sim import geometry
 
+def tile_px_for(cols, rows):
+    """Cell size in pixels so a `cols` x `rows` maze fills the target window.
+
+    A fixed scale cannot serve both grids the project uses: the physical test
+    maze is 3x3 and the competition maze is 16x16. Clamped at both ends, because
+    a cell too small cannot be clicked and a cell too large wins nothing.
+    """
+    longest_side = max(cols, rows)
+    fitted = config.RENDER_TARGET_WINDOW_PX // longest_side
+    return int(max(config.RENDER_MIN_TILE_PX, min(config.RENDER_MAX_TILE_PX, fitted)))
+
+
 def make_renderer(real_maze):
     """A Renderer for `real_maze`, or None if the display will not start.
 
@@ -31,7 +43,8 @@ class Renderer:
         pygame.init()
         self.maze = maze
         self.maze_height_mm = self.maze.structure.rows * config.MM_PER_CELL
-        self.scale = int(config.TILE_PX)
+        self.scale = tile_px_for(maze.structure.cols, maze.structure.rows)
+        self.px_per_mm = self.scale / float(config.MM_PER_CELL)
         # The margin is assigned BEFORE set_mode uses it. It was the other way
         # round briefly, which made every Renderer raise AttributeError; the
         # exception went unseen because make_renderer catches it and carries on
@@ -43,7 +56,7 @@ class Renderer:
         pygame.display.set_caption("Micro-Mouse")
 
     def draw(self, belief, mouse=None, path=None, done=None, animate=False,
-             highlight=None):
+             highlight=None, heading_marks=None):
         for event in pygame.event.get(): # Let the window be closed cleanly.
             if event.type == pygame.QUIT:
                 self.close()
@@ -90,6 +103,10 @@ class Renderer:
             for cell, colour in highlight.items():
                 self._fill_cell(cell, colour)
 
+        if heading_marks:  # {cell: compass side}, an arrow through the cell centre
+            for cell, side in heading_marks.items():
+                self._draw_heading_arrow(cell, side)
+
         if mouse is not None:
             self._draw_mouse(mouse)
 
@@ -120,6 +137,31 @@ class Renderer:
         pygame.draw.line(self.screen, config.RENDER_MOUSE_NOSE,
                          self._px(mouse.x_mm, mouse.y_mm), nose,
                          config.RENDER_MOUSE_OUTLINE_PX)
+
+    def _draw_heading_arrow(self, cell, side):
+        """Point an arrow out of a cell along a compass side.
+
+        The route editor needs to show which way the robot is placed: a .mmc is
+        a list of egocentric verbs, so the same file drives a different shape
+        depending on the start heading, and that is invisible from the cells.
+        """
+        dx, dy = config.SIDE_DELTA[side]
+        centre_mm = ((cell[0] + 0.5) * config.MM_PER_CELL,
+                     (cell[1] + 0.5) * config.MM_PER_CELL)
+        reach_mm = config.MM_PER_CELL * 0.35
+        tip_mm = (centre_mm[0] + dx * reach_mm, centre_mm[1] + dy * reach_mm)
+        barb_mm = reach_mm * 0.4
+        head = [
+            self._px(*tip_mm),
+            self._px(tip_mm[0] - dx * barb_mm - dy * barb_mm,
+                     tip_mm[1] - dy * barb_mm + dx * barb_mm),
+            self._px(tip_mm[0] - dx * barb_mm + dy * barb_mm,
+                     tip_mm[1] - dy * barb_mm - dx * barb_mm),
+        ]
+        pygame.draw.line(self.screen, config.RENDER_HEADING_ARROW,
+                         self._px(centre_mm[0] - dx * reach_mm, centre_mm[1] - dy * reach_mm),
+                         self._px(*tip_mm), config.RENDER_HEADING_ARROW_PX)
+        pygame.draw.polygon(self.screen, config.RENDER_HEADING_ARROW, head)
 
     def _fill_cell(self, cell, colour):
         """Paint one cell's interior, stopping short of the post corners."""
@@ -158,8 +200,8 @@ class Renderer:
     def cell_at_px(self, position_px):
         """Inverse of `_px`: a screen pixel -> the cell under it, or None if outside."""
         x_px, y_px = position_px
-        x_mm = (x_px - self.offset) / config.PX_PER_MM
-        y_mm = self.maze_height_mm - (y_px - self.offset) / config.PX_PER_MM
+        x_mm = (x_px - self.offset) / self.px_per_mm
+        y_mm = self.maze_height_mm - (y_px - self.offset) / self.px_per_mm
         x = int(x_mm // config.MM_PER_CELL)
         y = int(y_mm // config.MM_PER_CELL)
         if 0 <= x < self.maze.structure.cols and 0 <= y < self.maze.structure.rows:
@@ -168,8 +210,8 @@ class Renderer:
 
     """World mm -> screen px, flipping the y-axis (maze 0,0 bottom-left; pygame 0,0 top-left)."""
     def _px(self, x_mm, y_mm):
-        return (x_mm * config.PX_PER_MM + self.offset,
-                (self.maze_height_mm - y_mm) * config.PX_PER_MM + self.offset)
+        return (x_mm * self.px_per_mm + self.offset,
+                (self.maze_height_mm - y_mm) * self.px_per_mm + self.offset)
 
     """Turn a (BL, BR, TR, TL) mm-corner polygon into a pygame (x, y, w, h) rect, deriving width/height
     straight from the corners instead of a hardcoded config constant, and flipping the y-axis (maze 0,0 is 
@@ -178,10 +220,10 @@ class Renderer:
         bl, br, tr, tl = corners
         width_mm  = br[0] - bl[0]
         height_mm = tl[1] - bl[1]
-        x = bl[0] * config.PX_PER_MM + self.offset
-        y = (self.maze_height_mm - bl[1] - height_mm) * config.PX_PER_MM + self.offset
-        w = width_mm * config.PX_PER_MM
-        h = height_mm * config.PX_PER_MM
+        x = bl[0] * self.px_per_mm + self.offset
+        y = (self.maze_height_mm - bl[1] - height_mm) * self.px_per_mm + self.offset
+        w = width_mm * self.px_per_mm
+        h = height_mm * self.px_per_mm
         return (x, y, w, h)
 
     def belief_state(self, orientation, key, belief):

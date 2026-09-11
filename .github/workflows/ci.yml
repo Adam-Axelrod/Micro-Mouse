@@ -68,6 +68,8 @@ jobs:
           python main.py --maxspeed
           cp routes/lap3x3.mmc route.mmc
           python main.py --follow --map=mazes/test_mazes/blank3x3.num --laps=3
+          # No --map: the world comes from the route header's own grid size.
+          python main.py --follow --laps=2
 
       - name: Trace a run, then replay it into the sim
         run: |

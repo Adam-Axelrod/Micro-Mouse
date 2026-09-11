@@ -273,9 +273,28 @@ planner is involved, so a route driven wrongly is the drive layer's fault.
 Draw one on the PC, then copy it over:
 
 ```bash
-python3 sim/route_editor.py mazes/test_mazes/blank3x3.num   # click cells, s to save
+python3 sim/route_editor.py                    # 3x3 blank grid, the physical maze
+python3 sim/route_editor.py --size 16x16       # any grid, no maze file needed
+python3 sim/route_editor.py mazes/test_mazes/blank3x3.num   # walls from a file
 mpremote cp route.mmc :
 ```
+
+Click cells to build the route, `r` to rotate the start heading, `s` to save.
+The window scales itself to the grid, so a 3x3 draws large cells and a 16x16
+draws small ones.
+
+**Place the robot as the header says.** `.mmc` verbs are egocentric, so the same
+file drives a different shape from a different pose. The editor records the pose
+it was drawn from, and mode 6 prints it before the motors arm:
+
+```
+# grid: 3x3
+# start: 0 0 n
+# goal: 0 0
+```
+
+A file with no header is driven from cell (0, 0) facing north, and mode 6 says so
+rather than guessing silently. Redraw it to record a pose.
 
 Laps are the maze-relevant drift test. Every lap should return the robot to its
 start pose, so the offset after N laps is the accumulated open-loop error, and

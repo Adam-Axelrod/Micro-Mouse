@@ -82,6 +82,8 @@ SIDE_DELTA = {"n": (0, 1), "e": (1, 0), "s": (0, -1), "w": (-1, 0)}
 OPPOSITE = {"n": "s", "e": "w", "s": "n", "w": "e"}
 WALL_INDEX = {side: i for i, side in enumerate(DIRECTIONS)}
 DELTA_SIDE = {delta: side for side, delta in SIDE_DELTA.items()}
+# World-frame heading of each compass side, matching SIDE_DELTA: north is +y.
+HEADING_RADIANS = {"n": math.pi / 2.0, "e": 0.0, "s": -math.pi / 2.0, "w": math.pi}
 
 START_POS = (0, 0)
 
@@ -166,9 +168,16 @@ SENSOR_ADC_CEILING = 65535       # 16-bit ADC saturation
 SENSOR_INTENSITY_SCALE = 4.5e7   # counts * mm^2
 SENSOR_DISTANCE_OFFSET_MM = 15.0 # emitter-to-target standoff in the 1/d^2 law
 
-# Render-only pixel scale
+# Render-only pixel scale. PX_PER_MM is the FALLBACK only: a 3x3 maze at a fixed
+# 0.25 px/mm is a 135 px window with 45 px cells, which is too small to click
+# accurately, and a 32x32 would not fit a laptop screen. The Renderer picks its
+# own scale per maze to fill RENDER_TARGET_WINDOW_PX and stores it on the
+# instance, so it stays the only place that knows about pixels (invariant 4).
 PX_PER_MM = 0.25
 TILE_PX = MM_PER_CELL * PX_PER_MM
+RENDER_TARGET_WINDOW_PX = 720     # longest window edge the renderer aims for (px)
+RENDER_MIN_TILE_PX = 24           # below this a cell is unclickable (px)
+RENDER_MAX_TILE_PX = 160          # above this a 3x3 fills the screen for nothing (px)
 
 # Render-only, PC-only. Every one of these was a literal inside renderer.py,
 # against invariant 5. They are here so the invariant holds without an exception,
@@ -190,6 +199,11 @@ RENDER_MOUSE_NOSE = (255, 200, 0)      # heading line
 
 # Route editor (sim/route_editor.py). PC-only, never read on the Pico.
 ROUTE_EDITOR_REJECT_FLASH_S = 0.6      # a refused click stays red this long (s)
+ROUTE_EDITOR_DEFAULT_COLS = 3          # --size default: the physical test maze
+ROUTE_EDITOR_DEFAULT_ROWS = 3
+ROUTE_EDITOR_START_HEADING = "n"       # heading the robot is placed in, before rotation
 RENDER_TILE_START = (240, 240, 120)    # the route's first cell
 RENDER_TILE_END = (0, 220, 200)        # the route's current last cell
 RENDER_TILE_REJECT = (220, 40, 40)     # a click the editor refused
+RENDER_HEADING_ARROW = (255, 120, 0)   # the start heading drawn on the start cell
+RENDER_HEADING_ARROW_PX = 3            # arrow line width (px)

@@ -126,6 +126,58 @@ def test_write_command_file_round_trips():
     print("✓ test_write_command_file_round_trips passed")
 
 
+def test_the_header_carries_the_pose_a_route_was_drawn_from():
+    """Egocentric verbs are only correct from one pose, so the file records it."""
+    verbs = ["F 2", "R", "F 1", commands.HALT]
+    text = commands.render_command_file(verbs, maze_name="blank3x3.num", grid=(3, 3),
+                                        start=(0, 0, "n"), goal=(2, 2))
+    header = commands.parse_route_header(text)
+    assert header == {"maze": "blank3x3.num", "grid": (3, 3),
+                      "start": (0, 0, "n"), "goal": (2, 2)}, header
+    assert commands.parse_command_file(text) == verbs, "the header changed the verbs"
+    print("✓ test_the_header_carries_the_pose_a_route_was_drawn_from passed")
+
+
+def test_a_route_written_before_the_header_existed_still_parses():
+    """Header fields are absent, never guessed: (0, 0) facing north is a guess."""
+    legacy = "# micromouse route v1\n# maze: old.num\nF 2\nH\n"
+    assert commands.parse_command_file(legacy) == ["F 2", commands.HALT]
+    assert commands.parse_route_header(legacy) == {"maze": "old.num"}
+    print("✓ test_a_route_written_before_the_header_existed_still_parses passed")
+
+
+def test_a_header_naming_a_direction_that_is_not_a_compass_side_is_refused():
+    for bad in ("# start: 0 0 up\n", "# start: 0 0 N\n"):
+        try:
+            commands.parse_route_header(bad)
+        except ValueError:
+            continue
+        raise AssertionError("parse_route_header accepted " + repr(bad))
+    print("✓ test_a_header_naming_a_direction_that_is_not_a_compass_side_is_refused passed")
+
+
+def test_omitted_header_fields_are_left_out_of_the_file():
+    text = commands.render_command_file(["F 1", commands.HALT])
+    assert commands.parse_route_header(text) == {}
+    assert text.startswith("# micromouse route v1")
+    print("✓ test_omitted_header_fields_are_left_out_of_the_file passed")
+
+
+def test_write_command_file_records_the_start_and_the_goal():
+    path = "_commands_header_selftest.mmc"
+    try:
+        route = [(2, 1), (2, 2), (3, 2)]
+        commands.write_command_file(route, path, start_heading="e",
+                                    maze_name="unit", grid=(6, 6))
+        header = commands.read_route_header(path)
+        assert header["start"] == (2, 1, "e"), header
+        assert header["goal"] == (3, 2), header
+        assert header["grid"] == (6, 6), header
+    finally:
+        os.remove(path)
+    print("✓ test_write_command_file_records_the_start_and_the_goal passed")
+
+
 TESTS = [
     test_turn_between_picks_the_shortest_pivot,
     test_turn_between_rejects_a_turn_that_is_not_needed,
@@ -138,6 +190,11 @@ TESTS = [
     test_commands_end_with_halt_and_use_only_known_verbs,
     test_render_command_file_has_a_version_header,
     test_write_command_file_round_trips,
+    test_the_header_carries_the_pose_a_route_was_drawn_from,
+    test_a_route_written_before_the_header_existed_still_parses,
+    test_a_header_naming_a_direction_that_is_not_a_compass_side_is_refused,
+    test_omitted_header_fields_are_left_out_of_the_file,
+    test_write_command_file_records_the_start_and_the_goal,
 ]
 
 if __name__ == "__main__":
