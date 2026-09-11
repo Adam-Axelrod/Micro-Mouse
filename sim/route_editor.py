@@ -14,8 +14,9 @@ Saving with no --out writes `route.mmc` at the package root: the working file th
 robot carries, so `python3 main.py --follow` drives what you just drew. `routes/`
 holds fixtures worth keeping.
 
-Controls:
-    left click   append the cell to the route; click the last cell again to undo
+Controls, also shown in the window's status bar:
+    left click   append the cell to the route
+    u / backspace  undo the last cell (or click the last cell again)
     r            rotate the start heading (n -> e -> s -> w)
     s            save, and print the verb list
     c            clear the route
@@ -126,8 +127,7 @@ class RouteEditor:
             print("start {} facing {}".format(cell, self.start_heading))
             return
         if cell == self.route[-1]:
-            self.route.pop()
-            print("undo -> route is now {} cell(s)".format(len(self.route)))
+            self.undo()
             return
         reason = step_is_legal(self.maze, self.route[-1], cell)
         if reason:
@@ -151,16 +151,41 @@ class RouteEditor:
         self.start_heading = config.DIRECTIONS[(index + 1) % len(config.DIRECTIONS)]
         print("start heading -> {}".format(self.start_heading))
 
+    def undo(self):
+        """Drop the last cell. A misclick has to be cheap to take back.
+
+        Clicking the last cell again does the same thing, but nothing on screen
+        said so, so a misclick looked permanent.
+        """
+        if not self.route:
+            print("nothing to undo")
+            return
+        dropped = self.route.pop()
+        print("undo {} -> {} cell(s)".format(dropped, len(self.route)))
+
     def key(self, name):
         if name in ("q", "escape"):
             raise SystemExit
         if name == "c":
             self.route = []
             print("cleared")
+        elif name in ("u", "backspace"):
+            self.undo()
         elif name == "r":
             self.rotate_start_heading()
         elif name == "s":
             self.save()
+
+    def status_lines(self):
+        """The two lines the window's status bar shows: state, then the keys."""
+        if self.route:
+            state = "start {} facing {}   end {}   {} cell(s)".format(
+                self.start, self.start_heading, self.end, len(self.route))
+        else:
+            state = "click a cell to place the start ({}x{} grid, facing {})".format(
+                self.grid[0], self.grid[1], self.start_heading)
+        return (state,
+                "click add   u undo   r rotate start   s save   c clear   q quit")
 
     def save(self):
         try:
@@ -241,14 +266,14 @@ def main(argv):
     maze_path, size, out_path = parse_args(argv)
     maze_structure, maze_name = load_maze(maze_path, size)
 
-    view = renderer.make_renderer(maze_structure)
+    view = renderer.make_renderer(maze_structure, config.RENDER_HUD_PX)
     if view is None:
         raise SystemExit("route_editor.py needs a display.")
 
     editor = RouteEditor(maze_structure, maze_name, out_path)
     print("{}x{} grid ({}) -> route {}".format(
         maze_structure.cols, maze_structure.rows, maze_name, out_path))
-    print("click a cell to append, click the last cell to undo, "
+    print("click a cell to append, u to undo, "
           "r = rotate start heading, s = save, c = clear, q = quit")
     while True:
         for kind, value in view.poll_input():
@@ -256,8 +281,8 @@ def main(argv):
                 editor.click(value)
             else:
                 editor.key(value)
-        view.draw(maze_structure, path=editor.route, highlight=editor.highlight(),
-                  heading_marks=editor.heading_marks())
+        view.draw(maze_structure, route=editor.route, highlight=editor.highlight(),
+                  heading_marks=editor.heading_marks(), status=editor.status_lines())
 
 
 if __name__ == "__main__":

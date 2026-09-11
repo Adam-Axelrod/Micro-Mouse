@@ -255,8 +255,12 @@ def test_the_real_loop_survives_real_clicks_at_every_grid_size():
             for _ in range(3):
                 for kind, value in view.poll_input():
                     (editor.click if kind == "click" else editor.key)(value)
-                view.draw(grid, path=editor.route, highlight=editor.highlight(),
-                          heading_marks=editor.heading_marks())
+                # Mirror route_editor.main's draw call exactly. Passing `path`
+                # here while the editor passes `route` and `status` left the
+                # editor's real call untested.
+                view.draw(grid, route=editor.route, highlight=editor.highlight(),
+                          heading_marks=editor.heading_marks(),
+                          status=editor.status_lines())
             assert editor.route == [(0, 0), (0, 1), (1, 1)], (size, editor.route)
             assert editor.start_heading == "e"
             assert commands.read_route_header(OUT_PATH)["grid"] == (grid.cols, grid.rows)

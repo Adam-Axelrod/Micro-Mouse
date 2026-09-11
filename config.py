@@ -193,7 +193,7 @@ RENDER_BACKGROUND = (0, 0, 0)
 RENDER_WALL_KNOWN = (255, 255, 255)    # a wall the belief map has recorded
 RENDER_WALL_UNKNOWN = (80, 80, 80)     # a wall in the truth the belief has not seen
 RENDER_TILE_DONE = (0, 180, 160)       # cells already walked
-RENDER_TILE_PATH = (0, 90, 80)         # cells on the current plan
+RENDER_TILE_PATH = (0, 62, 56)         # cells on the current plan
 RENDER_MOUSE_BODY = (220, 60, 60)      # chassis outline
 RENDER_MOUSE_NOSE = (255, 200, 0)      # heading line
 
@@ -207,3 +207,25 @@ RENDER_TILE_END = (0, 220, 200)        # the route's current last cell
 RENDER_TILE_REJECT = (220, 40, 40)     # a click the editor refused
 RENDER_HEADING_ARROW = (255, 120, 0)   # the start heading drawn on the start cell
 RENDER_HEADING_ARROW_PX = 3            # arrow line width (px)
+
+# The drawn route. Filling every visited cell one flat colour hides the ORDER,
+# which is the only thing a route is: a 3x3 snake through all nine cells looked
+# identical to any other. The polyline and its per-segment arrows carry the order
+# and the direction, and the fill drops back to a dim background tint.
+RENDER_ROUTE_LINE = (255, 255, 255)    # polyline through the cell centres
+RENDER_ROUTE_LINE_PX = 5               # polyline width (px)
+RENDER_ROUTE_ARROW_FRACTION = 0.16     # arrowhead size, of a cell (fraction)
+RENDER_ROUTE_LABEL = (255, 255, 255)   # step number text
+RENDER_ROUTE_LABEL_MIN_TILE_PX = 56    # below this a step number does not fit (px)
+RENDER_ROUTE_LABEL_FONT_FRACTION = 0.2 # step number height, of a cell (fraction)
+RENDER_END_RING = (255, 90, 160)       # ring drawn inside the route's last cell
+RENDER_END_RING_PX = 5                 # ring line width (px)
+RENDER_END_RING_INSET = 0.22           # ring inset from the cell edge (fraction)
+
+# Editor status bar, drawn under the maze. Only the route editor asks for one;
+# every other mode builds a Renderer with no strip and is unchanged.
+RENDER_HUD_PX = 54                     # height of the status strip (px)
+RENDER_HUD_BACKGROUND = (22, 22, 26)
+RENDER_HUD_TEXT = (215, 215, 220)
+RENDER_HUD_FONT_PX = 15
+RENDER_HUD_LINE_PX = 19                # baseline spacing between HUD lines (px)
