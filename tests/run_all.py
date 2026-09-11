@@ -9,9 +9,12 @@ through weeks of breakage because no suite imported the modules that were
 broken. `contract/` exists specifically to stop that recurring: it asserts that
 the symbols other modules call actually exist and behave.
 
-    pure/      grid cells and compass sides. No pins, no mm, no pixels.
-    contract/  the drive.py robot boundary: power in, PWM duty out, trace records.
-    physics/   sim/ kinematics, raycasting, the duty-to-speed model. PC only.
+Each division answers one question:
+
+    logic/     does the brain compute the right thing? Cells and compass sides.
+    hardware/  would this hold on the board? The drive boundary and the trace.
+    sim/       is the simulation's arithmetic right? Kinematics, rays, renderer.
+    health/    is the repo still well formed? Imports, deployment set, layering.
 
 Plain functions and bare asserts. No pytest, no external dependencies.
 """
@@ -23,7 +26,7 @@ import sys
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 PACKAGE_DIR = os.path.dirname(TESTS_DIR)
 
-DIVISIONS = ("pure", "contract", "physics")
+DIVISIONS = ("logic", "hardware", "sim", "health")
 
 
 def division_files(name):
@@ -36,14 +39,21 @@ def division_files(name):
 
 
 def run_file(path):
-    """Run one test module in a fresh interpreter. Returns (ok, output)."""
+    """Run one test module in a fresh interpreter.
+
+    Returns (ok, summary, full_output). The summary is the last line of STDOUT
+    only: third-party import warnings land on stderr, and merging the two let a
+    pygame deprecation notice masquerade as the test result.
+    """
     result = subprocess.run(
         [sys.executable, path],
         cwd=PACKAGE_DIR,
         capture_output=True,
         text=True,
     )
-    return result.returncode == 0, (result.stdout + result.stderr)
+    stdout = result.stdout.strip()
+    summary = stdout.split("\n")[-1] if stdout else "no output"
+    return result.returncode == 0, summary, (result.stdout + result.stderr)
 
 
 def main():
@@ -67,11 +77,10 @@ def main():
 
         print("\n{}/".format(name))
         for path in files:
-            ok, output = run_file(path)
+            ok, summary, output = run_file(path)
             label = os.path.basename(path)
             if ok:
                 total_passed += 1
-                summary = output.strip().split("\n")[-1] if output.strip() else "passed"
                 print("  PASS  {:<34} {}".format(label, summary))
             else:
                 total_failed += 1

@@ -8,6 +8,7 @@ __pycache__/
 # if a particular run is worth keeping.
 motor_log.csv
 max_speed_test.csv
+max_speed_samples.csv
 stress_test.csv
 .lavish/
 

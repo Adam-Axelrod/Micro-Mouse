@@ -38,18 +38,11 @@ def test_goal_is_the_centre_cell():
 
 
 def test_goal_is_centred_on_odd_grids_too():
-    """Regression: `cols // 2 - 1` is even-only.
-
-    On a 3x3 it returned (0, 0) -- the START cell -- so the mouse believed it had
-    already arrived, exploration exited on the first tick, and every planned
-    route came back as a single cell. On a 5x5 it returned (1, 1) instead of the
-    true centre (2, 2). The physical test maze is 3x3, so this is not academic.
-    """
+    """Regression: `cols // 2 - 1` put a 3x3 goal on the start cell."""
     assert MazeStructure(cols=3, rows=3).goal == (1, 1)
     assert MazeStructure(cols=5, rows=5).goal == (2, 2)
     assert MazeStructure(cols=3, rows=3).goal != config.START_POS
 
-    # Non-square grids centre on each axis independently.
     assert MazeStructure(cols=3, rows=6).goal == (1, 2)
     print("✓ test_goal_is_centred_on_odd_grids_too passed")
 

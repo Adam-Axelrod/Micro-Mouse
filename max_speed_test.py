@@ -27,8 +27,15 @@ the arithmetic and nothing about the chassis. Only the floor run is evidence.
         max_speed_test.run(power=0.55)            # at cruise duty instead
 
 Every run appends a row to `max_speed_test.csv` on the Pico's filesystem.
+
+The dash also POLLS THE ENCODERS while it drives, every
+`config.MAX_SPEED_SAMPLE_INTERVAL_MS`, and appends the samples to
+`max_speed_samples.csv`. One run then gives the whole velocity curve instead of
+one average, which is what finally separates the acceleration ramp from the
+terminal speed. `report_ramp()` prints that curve; `run()` calls it for you.
 """
 
+import gc
 import math
 import time
 
@@ -62,10 +69,20 @@ LOG_HEADER = "# micromouse max speed test v{}\n".format(LOG_FORMAT_VERSION)
 LOG_COLUMNS = ("power,assumed_speed_mms,target_distance_mm,commanded_s,measured_s,"
                "left_ticks,right_ticks\n")
 
+# The samples go to their OWN file. The summary row above is one line per run and
+# other things already read it; a dash now also writes a few hundred sample rows,
+# and mixing the two would change a format that is not mine to change.
+SAMPLE_LOG_HEADER = "# micromouse max speed samples v1\n"
+SAMPLE_LOG_COLUMNS = "elapsed_ms,left_ticks,right_ticks\n"
+
 # Ticks over the last dash, so calibrate() can be called from the REPL after the
 # tape has been read. None until a run has happened. Lost on reset, which is why
 # the numbers also go to the log file.
 LAST_RUN = None
+
+# The samples from the last dash: (count, times_ms, left_ticks, right_ticks).
+# report_ramp() reads this when it is called with no arguments.
+LAST_SAMPLES = None
 
 # How far the tick-derived diameter may sit from the ruler before it means
 # something. Covers tyre compression and tape-reading slop; anything past it is
@@ -117,6 +134,225 @@ def plan(distance_mm=None, power=None):
     return distance_mm, power, assumed_speed_mms, capped_seconds
 
 
+def _drive_sampled(power, commanded_seconds, has_encoders):
+    """Drive straight for `commanded_seconds`, polling the encoders as it goes.
+
+    Returns (measured_seconds, count, times_ms, left_ticks, right_ticks).
+
+    THE DASH IS THE MEASUREMENT, so the sampling must not stretch it. Three rules
+    keep it honest:
+
+      * Every buffer is allocated BEFORE the motors start, and the heap is
+        collected first. Allocating inside a timing loop invites a garbage
+        collection pause that lands in the numbers.
+      * Each interval sleeps to an ABSOLUTE deadline measured from the start of
+        the dash, so the cost of a poll comes out of the next sleep instead of
+        adding to the total. A slow poll moves one sample, never the dash.
+      * With no decoder there is nothing to poll, so the dash runs as one
+        uninterrupted sleep exactly as it did before.
+
+    On the PC `drive.run_motion_for` steps sim physics instead of sleeping, and
+    `_now_ms` is already the sim clock, so the same loop times both targets.
+    """
+    interval_ms = config.MAX_SPEED_SAMPLE_INTERVAL_MS
+    capacity = config.MAX_SPEED_SAMPLE_LIMIT
+    total_ms = int(commanded_seconds * 1000.0)
+
+    # Pre-allocated, fixed length, written by index. Never appended to.
+    times_ms = [0] * capacity
+    left_ticks = [0] * capacity
+    right_ticks = [0] * capacity
+    read_encoders = setup.read_encoders
+    count = 0
+    gc.collect()
+
+    start_ms = _now_ms()
+    drive.drive_motors(power, power)
+
+    if not has_encoders:
+        drive.run_motion_for(commanded_seconds)
+    else:
+        elapsed_ms = 0
+        while elapsed_ms < total_ms:
+            deadline_ms = elapsed_ms + interval_ms
+            if deadline_ms > total_ms:
+                deadline_ms = total_ms
+
+            if HAS_SIM:
+                drive.run_motion_for((deadline_ms - elapsed_ms) / 1000.0)
+            else:
+                remaining_ms = deadline_ms - _diff_ms(_now_ms(), start_ms)
+                if remaining_ms > 0:
+                    time.sleep(remaining_ms / 1000.0)
+            elapsed_ms = deadline_ms
+
+            if count < capacity:
+                ticks = read_encoders()
+                if ticks is not None:
+                    times_ms[count] = _diff_ms(_now_ms(), start_ms)
+                    left_ticks[count] = ticks[0]
+                    right_ticks[count] = ticks[1]
+                    count += 1
+
+    drive.stop_motors()
+    measured_seconds = _diff_ms(_now_ms(), start_ms) / 1000.0
+    return measured_seconds, count, times_ms, left_ticks, right_ticks
+
+
+def _write_samples(count, times_ms, left_ticks, right_ticks, power, distance_mm):
+    """Append this dash's samples to their own CSV, under a run marker line.
+
+    Written AFTER the brake, never during the dash: a file write mid-run would
+    put flash latency straight into the measurement.
+    """
+    if count <= 0:
+        return
+    is_new = not maze.file_exists(config.MAX_SPEED_SAMPLE_LOG_PATH)
+    try:
+        with open(config.MAX_SPEED_SAMPLE_LOG_PATH, "a") as file_handle:
+            if is_new:
+                file_handle.write(SAMPLE_LOG_HEADER)
+                file_handle.write(SAMPLE_LOG_COLUMNS)
+            file_handle.write("# run power={:.2f} target_mm={:.0f} interval_ms={} samples={}\n".format(
+                power, distance_mm, config.MAX_SPEED_SAMPLE_INTERVAL_MS, count))
+            for index in range(count):
+                file_handle.write("{},{},{}\n".format(
+                    times_ms[index], left_ticks[index], right_ticks[index]))
+    except OSError as exc:
+        print("Could not write {}: {}".format(config.MAX_SPEED_SAMPLE_LOG_PATH, exc))
+
+
+def report_ramp(samples=None, stride_ms=None):
+    """Turn one dash's samples into a velocity-versus-time table.
+
+    This is the number the project has never had. `MAX_WHEEL_SPEED_MMS` is an
+    average from rest over several metres, so it is lower than the speed the
+    robot actually settles at, and how much lower depends on the distance. The
+    samples separate the two: the ramp, and the terminal speed after it.
+
+    Speed per interval comes from the tick deltas, mean of the two wheels:
+
+        mm/s = (|dL| + |dR|) / 2 x MM_PER_TICK / dt
+
+    A single interval is noisy, so the table reports a trailing mean over
+    MAX_SPEED_RAMP_SMOOTH_SAMPLES. Terminal speed is the highest smoothed value;
+    the ramp ends at the first sample reaching MAX_SPEED_RAMP_PLATEAU_FRACTION of
+    it, and the terminal figure printed is the mean over that plateau.
+    """
+    if samples is None:
+        samples = LAST_SAMPLES
+    if samples is None:
+        print("No samples in this session. Run a dash first.")
+        return None
+
+    count, times_ms, left_ticks, right_ticks = samples
+    if count < 2:
+        print("Fewer than two samples; no velocity curve. "
+              "The encoders read nothing during the dash.")
+        return None
+
+    mm_per_tick = config.MM_PER_TICK
+    window = config.MAX_SPEED_RAMP_SMOOTH_SAMPLES
+
+    # Per-interval speed. Index i covers sample i-1 to sample i.
+    speeds_mms = [0.0] * count
+    for index in range(1, count):
+        dt_s = (times_ms[index] - times_ms[index - 1]) / 1000.0
+        if dt_s <= 0.0:
+            continue
+        left_delta = abs(left_ticks[index] - left_ticks[index - 1])
+        right_delta = abs(right_ticks[index] - right_ticks[index - 1])
+        speeds_mms[index] = (left_delta + right_delta) / 2.0 * mm_per_tick / dt_s
+
+    # Trailing mean. No lookahead, so the ramp is never smoothed backwards in
+    # time into looking shorter than it was.
+    smoothed_mms = [0.0] * count
+    for index in range(1, count):
+        first = index - window + 1
+        if first < 1:
+            first = 1
+        total = 0.0
+        for back in range(first, index + 1):
+            total += speeds_mms[back]
+        smoothed_mms[index] = total / (index - first + 1)
+
+    terminal_peak = 0.0
+    for index in range(1, count):
+        if smoothed_mms[index] > terminal_peak:
+            terminal_peak = smoothed_mms[index]
+
+    plateau_speed = config.MAX_SPEED_RAMP_PLATEAU_FRACTION * terminal_peak
+    ramp_end_index = None
+    for index in range(1, count):
+        if smoothed_mms[index] >= plateau_speed:
+            ramp_end_index = index
+            break
+
+    if stride_ms is None:
+        stride_ms = config.MAX_SPEED_TABLE_ROW_MS
+    stride = int(stride_ms / config.MAX_SPEED_SAMPLE_INTERVAL_MS)
+    # A short dash has few samples to begin with. Thinning it on the same time
+    # grid as a 5 m run would print one row and hide the ramp, which is the one
+    # part of a short run worth seeing.
+    sparse_stride = count // config.MAX_SPEED_TABLE_MIN_ROWS
+    if stride > sparse_stride:
+        stride = sparse_stride
+    if stride < 1:
+        stride = 1
+
+    print("")
+    print("=== VELOCITY CURVE ===")
+    print("{} samples every {} ms. Speed is the mean of both wheels over the".format(
+        count, config.MAX_SPEED_SAMPLE_INTERVAL_MS))
+    print("interval; the smoothed column is a trailing mean of {} samples.".format(window))
+    print("")
+    print("   time_s    dist_mm    mm/s   smoothed")
+    for index in range(1, count, stride):
+        travelled_mm = (abs(left_ticks[index]) + abs(right_ticks[index])) / 2.0 * mm_per_tick
+        print("  {:7.2f}  {:9.0f}  {:6.0f}  {:9.0f}".format(
+            times_ms[index] / 1000.0, travelled_mm,
+            speeds_mms[index], smoothed_mms[index]))
+
+    total_mm = (abs(left_ticks[count - 1]) + abs(right_ticks[count - 1])) / 2.0 * mm_per_tick
+    total_s = times_ms[count - 1] / 1000.0
+    average_mms = total_mm / total_s if total_s > 0.0 else 0.0
+
+    print("")
+    if ramp_end_index is None:
+        print("Speed never settled: it was still rising at the end of the dash.")
+        print("Run a longer lane before trusting any terminal figure.")
+        terminal_mms = terminal_peak
+        ramp_ms = None
+    else:
+        plateau_total = 0.0
+        plateau_count = 0
+        for index in range(ramp_end_index, count):
+            plateau_total += smoothed_mms[index]
+            plateau_count += 1
+        terminal_mms = plateau_total / plateau_count
+        ramp_ms = times_ms[ramp_end_index]
+        ramp_mm = (abs(left_ticks[ramp_end_index]) + abs(right_ticks[ramp_end_index])) / 2.0 * mm_per_tick
+        print("Ramp duration : {:.0f} ms, over {:.0f} mm, to {:.0f}% of terminal".format(
+            ramp_ms, ramp_mm, config.MAX_SPEED_RAMP_PLATEAU_FRACTION * 100.0))
+        print("TERMINAL SPEED: {:.0f} mm/s   (mean of {} samples after the ramp)".format(
+            terminal_mms, plateau_count))
+    print("Dash average  : {:.0f} mm/s over {:.0f} mm in {:.2f} s".format(
+        average_mms, total_mm, total_s))
+    print("config.MAX_WHEEL_SPEED_MMS = {:.0f}".format(config.MAX_WHEEL_SPEED_MMS))
+    print("")
+    print("The average is BELOW the terminal speed by however much of the dash")
+    print("was ramp. That gap is why a 180 mm cell falls short: it is almost all")
+    print("ramp. Use the terminal speed for long moves, the ramp for short ones.")
+
+    return {
+        "samples": count,
+        "terminal_mms": terminal_mms,
+        "ramp_ms": ramp_ms,
+        "average_mms": average_mms,
+        "travelled_mm": total_mm,
+    }
+
+
 def run(distance_mm=None, power=None, enable_render=False):
     """Drive one straight dash at full duty, brake hard, and report the timing."""
     distance_mm, power, assumed_speed_mms, commanded_seconds = plan(distance_mm, power)
@@ -142,18 +378,17 @@ def run(distance_mm=None, power=None, enable_render=False):
     # Zero the encoders at the start line. None means no decoder, which is the
     # normal case on this board today; the dash still runs and still times.
     ticks_before = setup.read_encoders(reset=True)
-    if ticks_before is None:
+    has_encoders = ticks_before is not None
+    if not has_encoders:
         print("No encoder decoder ({}). Timing only, no tick capture.".format(
             setup.encoder_error))
+    else:
+        print("Sampling the encoders every {} ms through the dash.".format(
+            config.MAX_SPEED_SAMPLE_INTERVAL_MS))
 
     setup.LED_PIN.value(1)
-    start_ms = _now_ms()
-
-    drive.drive_motors(power, power)
-    drive.run_motion_for(commanded_seconds)
-    drive.stop_motors()
-
-    measured_seconds = _diff_ms(_now_ms(), start_ms) / 1000.0
+    (measured_seconds, sample_count, sample_times_ms,
+     sample_left, sample_right) = _drive_sampled(power, commanded_seconds, has_encoders)
     setup.LED_PIN.value(0)
 
     # Both channels at 65535 is a brake, not a coast (bench-confirmed, BT-3).
@@ -167,7 +402,8 @@ def run(distance_mm=None, power=None, enable_render=False):
 
     _blink(2, 400, 400)
 
-    global LAST_RUN
+    global LAST_RUN, LAST_SAMPLES
+    LAST_SAMPLES = (sample_count, sample_times_ms, sample_left, sample_right)
     LAST_RUN = {
         "power": power,
         "target_distance_mm": distance_mm,
@@ -193,6 +429,13 @@ def run(distance_mm=None, power=None, enable_render=False):
     _append_log_row("{:.2f},{:.1f},{:.0f},{:.3f},{:.3f},{},{}\n".format(
         power, assumed_speed_mms, distance_mm, commanded_seconds, measured_seconds,
         left_ticks, right_ticks))
+
+    _write_samples(sample_count, sample_times_ms, sample_left, sample_right,
+                   power, distance_mm)
+    if sample_count > 1:
+        print("{} samples written to {}.".format(
+            sample_count, config.MAX_SPEED_SAMPLE_LOG_PATH))
+        report_ramp()
 
     if HAS_SIM:
         state = setup.sim.get_mouse_state()

@@ -35,15 +35,15 @@ class Renderer:
         # The margin is assigned BEFORE set_mode uses it. It was the other way
         # round briefly, which made every Renderer raise AttributeError; the
         # exception went unseen because make_renderer catches it and carries on
-        # headless, and no automated run passes --render.
+        # headless, and no automated run passed --render.
         self.offset = config.RENDER_MARGIN_PX
-        self.screen = pygame.display.set_mode(
-            (maze.structure.cols * self.scale + 2 * self.offset,
+        self.screen = pygame.display.set_mode((maze.structure.cols * self.scale + 2 * self.offset,
              maze.structure.rows * self.scale + 2 * self.offset))
         self.clock = pygame.time.Clock()        # display throttle
         pygame.display.set_caption("Micro-Mouse")
 
-    def draw(self, belief, mouse=None, path=None, done=None, animate=False):
+    def draw(self, belief, mouse=None, path=None, done=None, animate=False,
+             highlight=None):
         for event in pygame.event.get(): # Let the window be closed cleanly.
             if event.type == pygame.QUIT:
                 self.close()
@@ -73,37 +73,23 @@ class Renderer:
 
 
         if done:
-            post_size = config.POST_SIDE_MM
-            cell_pitch = config.MM_PER_CELL
             for step in done:
-                x, y = step
-                # Cell interior corners in mm (excluding the post corners)
-                bl = (x * cell_pitch + post_size, y * cell_pitch + post_size)
-                br = ((x + 1) * cell_pitch, y * cell_pitch + post_size)
-                tr = ((x + 1) * cell_pitch, (y + 1) * cell_pitch)
-                tl = (x * cell_pitch + post_size, (y + 1) * cell_pitch)
-                rect = self._rect_from_corners((bl, br, tr, tl))
-                pygame.draw.rect(self.screen, config.RENDER_TILE_DONE, rect)
+                self._fill_cell(step, config.RENDER_TILE_DONE)
             if animate:
                 time.sleep(config.RENDER_DONE_STEP_DELAY_S)
                 pygame.display.flip()
 
         if path:
-            post_size = config.POST_SIDE_MM
-            cell_pitch = config.MM_PER_CELL
             for step in path:
-                x, y = step
-                # Cell interior corners in mm (excluding the post corners)
-                bl = (x * cell_pitch + post_size, y * cell_pitch + post_size)
-                br = ((x + 1) * cell_pitch, y * cell_pitch + post_size)
-                tr = ((x + 1) * cell_pitch, (y + 1) * cell_pitch)
-                tl = (x * cell_pitch + post_size, (y + 1) * cell_pitch)
-                rect = self._rect_from_corners((bl, br, tr, tl))
-                pygame.draw.rect(self.screen, config.RENDER_TILE_PATH, rect)
+                self._fill_cell(step, config.RENDER_TILE_PATH)
                 if animate:
                     time.sleep(config.RENDER_PATH_STEP_DELAY_S)
                     pygame.display.flip()
-        
+
+        if highlight:  # {cell: colour}, painted last so it wins over path/done
+            for cell, colour in highlight.items():
+                self._fill_cell(cell, colour)
+
         if mouse is not None:
             self._draw_mouse(mouse)
 
@@ -135,6 +121,51 @@ class Renderer:
                          self._px(mouse.x_mm, mouse.y_mm), nose,
                          config.RENDER_MOUSE_OUTLINE_PX)
 
+    def _fill_cell(self, cell, colour):
+        """Paint one cell's interior, stopping short of the post corners."""
+        x, y = cell
+        post_size = config.POST_SIDE_MM
+        cell_pitch = config.MM_PER_CELL
+        bl = (x * cell_pitch + post_size, y * cell_pitch + post_size)
+        br = ((x + 1) * cell_pitch, y * cell_pitch + post_size)
+        tr = ((x + 1) * cell_pitch, (y + 1) * cell_pitch)
+        tl = (x * cell_pitch + post_size, (y + 1) * cell_pitch)
+        pygame.draw.rect(self.screen, colour, self._rect_from_corners((bl, br, tr, tl)))
+
+    def poll_input(self):
+        """Drain the window's event queue and return it in GRID terms, not pixels.
+
+        Records are ("click", (x, y)) for a left click inside a cell and
+        ("key", name) for a key press, where `name` is pygame's own key name
+        ("s", "c", "escape"). A QUIT closes the window and raises SystemExit, the
+        same way `draw` does. This lives here because the renderer owns the only
+        mm-to-pixel mapping in the codebase, so it owns the inverse too: a caller
+        that needs mouse input must not have to know PX_PER_MM.
+        """
+        records = []
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.close()
+                raise SystemExit
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                cell = self.cell_at_px(event.pos)
+                if cell is not None:
+                    records.append(("click", cell))
+            elif event.type == pygame.KEYDOWN:
+                records.append(("key", pygame.key.name(event.key)))
+        return records
+
+    def cell_at_px(self, position_px):
+        """Inverse of `_px`: a screen pixel -> the cell under it, or None if outside."""
+        x_px, y_px = position_px
+        x_mm = (x_px - self.offset) / config.PX_PER_MM
+        y_mm = self.maze_height_mm - (y_px - self.offset) / config.PX_PER_MM
+        x = int(x_mm // config.MM_PER_CELL)
+        y = int(y_mm // config.MM_PER_CELL)
+        if 0 <= x < self.maze.structure.cols and 0 <= y < self.maze.structure.rows:
+            return (x, y)
+        return None
+
     """World mm -> screen px, flipping the y-axis (maze 0,0 bottom-left; pygame 0,0 top-left)."""
     def _px(self, x_mm, y_mm):
         return (x_mm * config.PX_PER_MM + self.offset,
@@ -156,9 +187,9 @@ class Renderer:
     def belief_state(self, orientation, key, belief):
         """Has the belief map recorded this wall? No belief = nothing known yet.
 
-        Mode 6 follows a route file, which carries no walls, so a caller may
-        legitimately have no belief to draw. That renders every wall as unknown
-        rather than raising.
+        Mode 6 follows a route file, which carries no walls, and the route editor
+        draws a bare maze, so a caller may legitimately have no belief. Both
+        render every wall as unknown rather than raising.
         """
         if belief is None:
             return False

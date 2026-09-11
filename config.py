@@ -51,6 +51,20 @@ MAX_SPEED_TEST_COUNTDOWN_MS = 700      # on-time of one countdown blink (ms)
 MAX_SPEED_TEST_BRAKE_HOLD_S = 1.5      # hold the brake this long before reporting (s)
 MAX_SPEED_TEST_MAX_DURATION_S = 20.0   # runaway guard on any single dash (s)
 
+# --- Mode 4 encoder sampling: the acceleration ramp ---------------------------
+# MAX_WHEEL_SPEED_MMS below is an AVERAGE FROM REST, because one dash used to
+# yield one number. Polling the encoders DURING the dash turns the same run into
+# a velocity curve, so the ramp duration and the terminal speed come out of a
+# single run instead of a series of dashes at different distances.
+MAX_SPEED_SAMPLE_LOG_PATH = _package_path("max_speed_samples.csv")
+MAX_SPEED_SAMPLE_INTERVAL_MS = 20       # encoder poll period during the dash (ms)
+MAX_SPEED_SAMPLE_LIMIT = 1200           # pre-allocated sample slots (count)
+MAX_SPEED_RAMP_SMOOTH_SAMPLES = 5       # samples averaged into one velocity point (count)
+MAX_SPEED_RAMP_PLATEAU_FRACTION = 0.98  # of terminal speed = the ramp is over (fraction)
+MAX_SPEED_TABLE_ROW_MS = 100            # one printed table row per this much time (ms)
+MAX_SPEED_TABLE_MIN_ROWS = 20           # print every sample rather than fall below this (rows)
+# --- end mode 4 encoder sampling ----------------------------------------------
+
 # Stress test (mode 5). Drives the sprint out and back N times to amplify small
 # per-move errors, then reports where the encoders think it ended up. Run at a
 # lower power than mode 4: the direction reversal is the harshest thing the
@@ -173,3 +187,9 @@ RENDER_TILE_DONE = (0, 180, 160)       # cells already walked
 RENDER_TILE_PATH = (0, 90, 80)         # cells on the current plan
 RENDER_MOUSE_BODY = (220, 60, 60)      # chassis outline
 RENDER_MOUSE_NOSE = (255, 200, 0)      # heading line
+
+# Route editor (sim/route_editor.py). PC-only, never read on the Pico.
+ROUTE_EDITOR_REJECT_FLASH_S = 0.6      # a refused click stays red this long (s)
+RENDER_TILE_START = (240, 240, 120)    # the route's first cell
+RENDER_TILE_END = (0, 220, 200)        # the route's current last cell
+RENDER_TILE_REJECT = (220, 40, 40)     # a click the editor refused
