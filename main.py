@@ -42,14 +42,17 @@ def run_bench(**kwargs):
     bench_test.run_all()
 
 
-# 0-indexed array of available modes: (Name, Runner Function). Every runner
-# accepts enable_render, so the dispatcher never special-cases an index.
+# 0-indexed array of available modes: (Name, Runner, extra CLI option names).
+# Every runner accepts enable_render, so the dispatcher never special-cases an
+# index. The third element lists which of CLI_OPTIONS that runner will accept,
+# so an option meant for one mode is never silently handed to another.
 MODES = [
-    ("Explorer", exploration.run),
-    ("Speed Run", speed_run.run),
-    ("Bench Test", run_bench),
-    ("Max Speed Test", max_speed_test.run),
-    ("Stress Test", max_speed_test.stress),
+    ("Explorer", exploration.run, ()),
+    ("Speed Run", speed_run.run, ()),
+    ("Bench Test", run_bench, ()),
+    ("Max Speed Test", max_speed_test.run, ()),
+    ("Stress Test", max_speed_test.stress, ("laps",)),
+    ("Follow Route", speed_run.follow, ("route_path", "map_path", "laps")),
 ]
 
 # CLI overrides, so a headless PC run does not need a button. Index into MODES.
@@ -60,12 +63,34 @@ CLI_MODE_FLAGS = {
     "--bench": 2,
     "--maxspeed": 3,
     "--stress": 4,
+    "--follow": 5,
+}
+
+# `--name=value` options, mapped to the keyword the runner takes. PC convenience
+# only: on the Pico there is no command line, so these fall back to config.
+CLI_OPTIONS = {
+    "--route": ("route_path", str),
+    "--map": ("map_path", str),
+    "--laps": ("laps", int),
 }
 
 
 def blink_led(times, on_duration_ms=100, off_duration_ms=None):
     """Kept as an alias so REPL habits and bench_test keep working."""
     drive.blink_led(times, on_duration_ms, off_duration_ms)
+
+
+def cli_options(argv, accepted):
+    """The `--name=value` options this mode accepts, parsed from argv."""
+    options = {}
+    for arg in argv:
+        for flag, (keyword, cast) in CLI_OPTIONS.items():
+            if arg.startswith(flag + "=") and keyword in accepted:
+                try:
+                    options[keyword] = cast(arg.split("=", 1)[1])
+                except ValueError:
+                    print("Ignoring {}: not a valid value.".format(arg))
+    return options
 
 
 def selected_cli_mode(argv):
@@ -84,12 +109,15 @@ def selected_cli_mode(argv):
     return None
 
 
-def execute(mode_index, enable_render):
+def execute(mode_index, enable_render, argv=()):
     """Run one mode with the motor trace open around it."""
-    name, runner = MODES[mode_index]
+    name, runner, accepted = MODES[mode_index]
+    options = cli_options(argv, accepted)
     print(f"Executing Mode {mode_index + 1}: {name}")
+    if options:
+        print(f"  options: {options}")
     try:
-        runner(enable_render=enable_render)
+        runner(enable_render=enable_render, **options)
     finally:
         drive.stop_trace()
 
@@ -103,14 +131,14 @@ def main():
     drive.stop_motors()
 
     print("Maze Mouse Ready.")
-    for idx, (name, _) in enumerate(MODES):
+    for idx, (name, _, _accepted) in enumerate(MODES):
         print(f"  Mode {idx + 1}: {name}")
     print("SW1: Select Mode | SW2: Execute Selected Mode")
 
     cli_mode_idx = selected_cli_mode(sys.argv)
     if cli_mode_idx is not None:
         print(f"CLI requested Mode {cli_mode_idx + 1}: {MODES[cli_mode_idx][0]}")
-        execute(cli_mode_idx, enable_render)
+        execute(cli_mode_idx, enable_render, sys.argv)
         return
 
     current_mode = 0  # 0-based index (Mode 1 default)
@@ -123,13 +151,13 @@ def main():
         while setup.sw1.value() == 0:
             time.sleep(0.02)
     elif setup.sw2.value() == 0:
-        execute(current_mode, enable_render)
+        execute(current_mode, enable_render, sys.argv)
         return
 
     # Non-interactive PC sim default: if no button is held and running on PC
     if not setup.IS_HARDWARE:
         print("No button pressed (PC Sim). Defaulting to Mode 2: Speed Run.")
-        execute(1, enable_render)
+        execute(1, enable_render, sys.argv)
         return
 
     # Symmetrical button polling loop (Pico & PC sim)
@@ -144,7 +172,7 @@ def main():
         elif setup.sw2.value() == 0:
             while setup.sw2.value() == 0:
                 time.sleep(0.02)
-            execute(current_mode, enable_render)
+            execute(current_mode, enable_render, sys.argv)
             break
         time.sleep(0.05)
 

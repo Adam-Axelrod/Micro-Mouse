@@ -14,9 +14,26 @@ def _package_path(filename):
     return PACKAGE_DIR + "/" + filename if PACKAGE_DIR else filename
 
 
-# Default maze files
+# Maps and routes. Two working files sit at the package root and are what the
+# robot actually reads; both are run artefacts, and both are copied in from a
+# committed fixture directory.
+#
+#   committed fixture        working file      read by
+#   mazes/*.num              belief.num        mode 2, which plans over it
+#   routes/*.mmc             route.mmc         mode 6, which follows it verbatim
+#
 DEFAULT_MAZE = _package_path("groundtruth.num")
 SAVED_BELIEF_MAZE = _package_path("belief.num")
+SAVED_ROUTE = _package_path("route.mmc")
+MAZES_DIR = _package_path("mazes")
+ROUTES_DIR = _package_path("routes")
+
+# Follow-route mode (mode 6). Driving a CLOSED route N times is the maze-relevant
+# stress test: every lap should return the robot to where it started, so the
+# offset after N laps is the accumulated open-loop error. Unlike mode 5's
+# corridor sprint, the turns accumulate too.
+FOLLOW_ROUTE_LAPS = 1                  # laps per run; > 1 to accumulate drift
+INTER_LAP_SETTLE_S = 1.0               # brake held between laps (s)
 
 # Motor command trace. Written on the Pico during a run, copied to the PC and
 # replayed into the sim (see motor_log.py / replay_log.py).

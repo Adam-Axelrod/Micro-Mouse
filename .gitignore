@@ -10,3 +10,12 @@ motor_log.csv
 max_speed_test.csv
 stress_test.csv
 .lavish/
+
+# Working files: the map and the route currently loaded on the robot.
+# Committed fixtures live in mazes/ and routes/.
+belief.num
+route.mmc
+
+# Agent worktrees and local tooling
+.claude/
+.lavish/

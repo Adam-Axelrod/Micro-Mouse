@@ -8,6 +8,8 @@ egocentric verbs into timed drives. It does not own the motors -- `drive.py`
 does. Anything that only needs to move a wheel should import `drive`, not this.
 """
 
+import math
+
 import commands
 import config
 import drive
@@ -93,6 +95,110 @@ def load_and_plan_route(belief_file_path=None, start_heading=config.DIRECTIONS[0
     return optimal_route, movement_commands, discovered_maze
 
 
+def _sim_world(map_path=None, enable_render=False):
+    """Load the maze the sim and the renderer should use. Returns a Renderer or None."""
+    if not (HAS_SIM or enable_render):
+        return None
+    real_maze = maze.MazeStructure(*maze.num_file_import(map_path or config.DEFAULT_MAZE))
+    if HAS_SIM:
+        setup.sim.set_sim_maze(real_maze)
+    return make_renderer(real_maze) if enable_render else None
+
+
+def follow(route_path=None, map_path=None, laps=None, enable_render=False):
+    """Mode 6. Drive a hand-authored .mmc route verbatim, `laps` times.
+
+    No planning happens here. The route comes from a file, so this exercises the
+    MOTION layer alone: if the robot ends up somewhere wrong, the planner is not
+    a suspect. That is what makes it the useful path-following test.
+
+    Driving a CLOSED route N times is the maze-relevant stress test. Every lap
+    should return the robot to its start pose, so the offset after N laps is the
+    accumulated open-loop error -- and unlike mode 5's corridor sprint, the turn
+    error accumulates too instead of cancelling.
+    """
+    if route_path is None:
+        route_path = config.SAVED_ROUTE
+    if laps is None:
+        laps = config.FOLLOW_ROUTE_LAPS
+
+    print("=== STARTING FOLLOW ROUTE MODE ===")
+    if not maze.file_exists(route_path):
+        print("No route at {}. Draw one with sim/route_editor.py, or copy a".format(route_path))
+        print("fixture from {} into place.".format(config.ROUTES_DIR))
+        return None
+
+    # Parsed and validated BEFORE the motors are armed: a malformed route must
+    # fail at the file, not halfway down a corridor.
+    movement_commands = commands.read_command_file(route_path)
+    print("Route: {} ({} verbs) x {} lap(s)".format(route_path, len(movement_commands), laps))
+    print("Verbs: {}".format(movement_commands))
+
+    if laps > 1 and not commands.closes_the_loop(movement_commands):
+        print("WARNING: this route ends {} quarter turn(s) off its start heading.".format(
+            commands.net_quarter_turns(movement_commands) % 4))
+        print("  Lap 2 will set off in the wrong direction. Append a closing turn")
+        print("  to the route file before using it as a drift test.")
+
+    drive.start_trace()
+    drive.blink_led(6, 80)
+
+    render_object = _sim_world(map_path, enable_render)
+
+    ticks_before = setup.read_encoders(reset=True)
+    if ticks_before is None:
+        print("No encoder decoder ({}). Driving blind, no drift figure.".format(
+            setup.encoder_error))
+
+    for lap in range(laps):
+        if laps > 1:
+            print("--- lap {} of {}".format(lap + 1, laps))
+        execute_movement_commands(movement_commands, render_object, None, None)
+
+        ticks = setup.read_encoders()
+        if ticks is not None:
+            print("    ticks so far: left {:+}, right {:+}  ({:.0f} mm / {:.0f} mm)".format(
+                ticks[0], ticks[1], ticks[0] * config.MM_PER_TICK, ticks[1] * config.MM_PER_TICK))
+        if lap + 1 < laps:
+            drive.stop_motors()
+            drive.run_motion_for(config.INTER_LAP_SETTLE_S, render_object)
+
+    drive.stop_motors()
+    _report_drift(laps, movement_commands)
+    return movement_commands
+
+
+def _report_drift(laps, movement_commands):
+    """Say where the run ended up, by whichever measure is available.
+
+    The wheel differential is TOTAL TURNING, not error: a lap with four right
+    turns differentially counts a full 360 whether or not it drove accurately.
+    So the honest figure is the residual against what the route asked for.
+    """
+    ticks = setup.read_encoders()
+    if ticks is not None:
+        left_mm = ticks[0] * config.MM_PER_TICK
+        right_mm = ticks[1] * config.MM_PER_TICK
+        print("Encoders over {} lap(s): left {:+.0f} mm, right {:+.0f} mm.".format(
+            laps, left_mm, right_mm))
+
+        measured_deg = math.degrees((right_mm - left_mm) / config.TRACK_WIDTH_MM)
+        commanded_deg = -90.0 * commands.net_quarter_turns(movement_commands) * laps
+        print("  turning: commanded {:+.0f} deg, encoders say {:+.0f} deg".format(
+            commanded_deg, measured_deg))
+        print("  HEADING RESIDUAL: {:+.1f} deg over {} lap(s)".format(
+            measured_deg - commanded_deg, laps))
+
+    if HAS_SIM:
+        state = setup.sim.get_mouse_state()
+        start_x = start_y = config.MM_PER_CELL / 2.0
+        print("Sim pose: x {:.0f} mm, y {:.0f} mm, heading {:.1f} deg".format(
+            state.x_mm, state.y_mm, math.degrees(state.heading_radians)))
+        print("  offset from start: {:.0f} mm".format(
+            ((state.x_mm - start_x) ** 2 + (state.y_mm - start_y) ** 2) ** 0.5))
+        print("  (the sim has no acceleration ramp, so its offset is optimistic)")
+
+
 def run(enable_render=False):
     """Run speed run mode."""
     print("=== STARTING SPEED RUN MODE ===")
@@ -102,13 +208,7 @@ def run(enable_render=False):
     route, movement_commands, belief = load_and_plan_route()
     print(f"Optimal cell path ({len(route)} cells): {route}")
 
-    render_object = None
-    if HAS_SIM or enable_render:
-        real_maze = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE))
-        if HAS_SIM:
-            setup.sim.set_sim_maze(real_maze)
-        if enable_render:
-            render_object = make_renderer(real_maze)
+    render_object = _sim_world(enable_render=enable_render)
 
     execute_movement_commands(movement_commands, render_object, belief, route)
 
