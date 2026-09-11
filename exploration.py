@@ -4,34 +4,31 @@ Autonomous cell-by-cell maze exploration using flood-fill and belief mapping.
 Pico and PC compatible.
 """
 
-import time
 import config
+import drive
 import maze
 import search_algorithms
 import setup
 from explorer import Explorer
 
-# Optional PC-only Pygame renderer imports
 try:
-    import geometry
-    from renderer import Renderer
-    HAS_PYGAME = True
+    from sim.renderer import make_renderer
 except ImportError:
-    HAS_PYGAME = False
+    def make_renderer(real_maze):
+        return None
 
 HAS_SIM = setup.sim is not None
 
 
-def blink_led(times, on_duration_ms=150, off_duration_ms=150):
-    for _ in range(times):
-        setup.LED_PIN.value(1)
-        time.sleep(on_duration_ms / 1000.0)
-        setup.LED_PIN.value(0)
-        time.sleep(off_duration_ms / 1000.0)
-
-
 def read_walls(real_maze, current_position):
-    """Read true wall presence around current cell (simulation mode)."""
+    """Read true wall presence around current cell.
+
+    SIMULATION ONLY, and a deliberate shortcut: this reads the ground-truth maze
+    file, not a sensor. The simulated reflective sensors (sim/mouse.py,
+    sim/geometry.py) are built but nothing converts an ADC reading into a sensed
+    side yet, so mode 1 cannot run on the board -- there is no answer key there.
+    Replacing this function is the whole of "autonomous exploration on hardware".
+    """
     walls = real_maze.cells[current_position]
     sensed_walls = []
     for wall_flag, compass_side in zip(walls, config.DIRECTIONS):
@@ -43,23 +40,17 @@ def read_walls(real_maze, current_position):
 def run(enable_render=False, save_belief_path=None):
     """Run cell-by-cell exploration mode."""
     print("=== STARTING EXPLORATION MODE ===")
-    blink_led(3, on_duration_ms=150, off_duration_ms=150)
+    drive.blink_led(3, 150)
 
     real_maze = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE))
-    
+
     if HAS_SIM:
         setup.sim.set_sim_maze(real_maze)
 
     belief = maze.MazeStructure(cols=real_maze.cols, rows=real_maze.rows)
     explorer_robot = Explorer(belief_map=belief)
 
-    render_object = None
-    if HAS_PYGAME and enable_render:
-        try:
-            render_object = Renderer(geometry.MazeGeometry(real_maze))
-        except Exception as exc:
-            print(f"Renderer init failed ({type(exc).__name__}: {exc}); continuing without rendering.")
-            render_object = None
+    render_object = make_renderer(real_maze) if enable_render else None
 
     route = []
 
@@ -97,7 +88,7 @@ def run(enable_render=False, save_belief_path=None):
         while explorer_robot.path_to_execute:
             explorer_robot.step()
             if HAS_SIM:
-                setup.sim.step_sim_physics(delta_time_seconds=0.01)
+                setup.sim.step_sim_physics(config.SIM_TIMESTEP_S)
 
     if save_belief_path is None:
         save_belief_path = config.SAVED_BELIEF_MAZE

@@ -1,6 +1,6 @@
 """Hardware bench tests for the UKMARS Gemini chassis (Pico / MicroPython only).
 
-This is the bring-up checklist from HANDOFF.md turned into runnable code. It
+This is the hardware bring-up checklist turned into runnable code. It
 produces BENCH EVIDENCE: every check ends in a recorded PASS/FAIL/value that
 `summary()` prints as one paste-back block. Sim-green proves nothing here.
 
@@ -44,7 +44,7 @@ import math
 import time
 
 import config
-import main
+import drive
 import setup
 
 # --------------------------------------------------------------------------------------
@@ -61,9 +61,9 @@ SETTLE_MS = 300              # let a wheel come to rest before reading counts (m
 # quadrature jitter, well below one hand-roll revolution (~1400 ticks).
 MOVED_TICKS = 20
 
-# Encoder A/B pins (left = 8/9, right = 6/7)
-LEFT_ENC_A, LEFT_ENC_B = 8, 9
-RIGHT_ENC_A, RIGHT_ENC_B = 6, 7
+# Encoder A/B pins. Defined in setup.py, the hardware boundary, not here.
+LEFT_ENC_A, LEFT_ENC_B = setup.LEFT_ENCODER_A, setup.LEFT_ENCODER_B
+RIGHT_ENC_A, RIGHT_ENC_B = setup.RIGHT_ENCODER_A, setup.RIGHT_ENCODER_B
 
 # Emitter settle time before reading the lit ADC value (ms). The phototransistor
 # needs the LED to actually be on; reading too early samples the unlit state.
@@ -101,7 +101,7 @@ def summary():
     for check_id, outcome, detail in RESULTS:
         print("{:<22} {:<6} {}".format(check_id, outcome, detail))
     print("=======================================================")
-    print("Paste this into LOG.md / the session notes.")
+    print("Paste this into today's Logs/ entry.")
 
 
 def reset_results():
@@ -183,10 +183,10 @@ def _pulse(left_power, right_power, duration_ms, label):
     print("  -> {}: drive_motors({:+.2f}, {:+.2f}) for {} ms".format(
         label, left_power, right_power, duration_ms))
     try:
-        main.drive_motors(left_power, right_power)
+        drive.drive_motors(left_power, right_power)
         time.sleep_ms(duration_ms)
     finally:
-        main.stop_motors()
+        drive.stop_motors()
     time.sleep_ms(SETTLE_MS)
 
 
@@ -221,14 +221,12 @@ _encoder_error = None
 
 
 def _get_encoders():
-    """Construct the PIO quadrature decoder once; None if it is unavailable."""
+    """The quadrature decoder, via the boundary; None if it is unavailable."""
     global _encoders, _encoder_error
     if _encoders is None and _encoder_error is None:
-        try:
-            from diagnostic_encoders import Encoders
-            _encoders = Encoders()
-        except Exception as exc:  # ImportError on PC, PIO claim failure on Pico
-            _encoder_error = str(exc)
+        _encoders = setup.get_encoders()
+        if _encoders is None:
+            _encoder_error = setup.encoder_error
             print("  !! encoders unavailable: {}".format(_encoder_error))
     return _encoders
 
@@ -259,7 +257,7 @@ def bt0_boot():
     _record("BT-0.platform", "PASS", "MicroPython machine module present")
 
     print("  Onboard LED: 3 blinks.")
-    main.blink_led(3)
+    drive.blink_led(3)
 
     indicators = (
         ("leftSensorLED", setup.leftSensorLED),
@@ -389,10 +387,10 @@ def bt3_brake_vs_coast():
 
     _pause("spinning up, then cutting to both-channels-65535 -- watch the wheels")
     print("  -> spinning up")
-    main.drive_motors(BENCH_DUTY_POWER, BENCH_DUTY_POWER)
+    drive.drive_motors(BENCH_DUTY_POWER, BENCH_DUTY_POWER)
     time.sleep_ms(MAX_PULSE_MS)
     print("  -> cut (stop_motors)")
-    main.stop_motors()
+    drive.stop_motors()
 
     braked = _ask("Did the wheels stop DEAD? (n = they freewheeled to a stop)")
     if braked is None:
@@ -597,7 +595,7 @@ def spin_check(power=BENCH_DUTY_POWER, timeout_ms=400, settle_ms=500):
                 print("  {:>5} motor -> NO ENCODER FEEDBACK ({} ticks) -- suspect this channel's trace".format(name, moved))
             time.sleep_ms(settle_ms)
     finally:
-        main.stop_motors()
+        drive.stop_motors()
 
 
 def encoder_fault_menu():
@@ -903,11 +901,11 @@ def run_all():
         try:
             check()
         except KeyboardInterrupt:
-            main.stop_motors()
+            drive.stop_motors()
             print("  Interrupted -- motors stopped.")
             _record(title.split()[0], "SKIP", "interrupted")
         except Exception as exc:
-            main.stop_motors()
+            drive.stop_motors()
             _record(title.split()[0], "FAIL", "raised: {}".format(exc))
     summary()
 

@@ -4,6 +4,19 @@ venv/
 __pycache__/
 *.pyc
 
-# Motor traces are run artefacts (one per run), not source. Copy a Pico trace in
-# under its own name if you want to keep it.
+# Run artefacts, one per run, not source. Copy a Pico file in under its own name
+# if a particular run is worth keeping.
 motor_log.csv
+max_speed_test.csv
+max_speed_samples.csv
+stress_test.csv
+.lavish/
+
+# Working files: the map and the route currently loaded on the robot.
+# Committed fixtures live in mazes/ and routes/.
+belief.num
+route.mmc
+
+# Agent worktrees and local tooling
+.claude/
+.lavish/

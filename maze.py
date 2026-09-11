@@ -7,13 +7,16 @@ class MazeStructure:
         self.cols = cols
         self.rows = rows
         self.cells = cells if cells else self.generate_empty_maze(cols, rows)
-        self.goal = (self.cols // 2 - 1, self.rows // 2 - 1)
+        # Centre cell. `(n - 1) // 2` is correct for BOTH parities: on an even
+        # grid it picks the bottom-left of the four centre cells (16 -> 7, the
+        # UKMARS convention), and on an odd grid it picks the single true centre
+        # (3 -> 1). The old `n // 2 - 1` was even-only: it put a 5x5 goal
+        # off-centre and, on a 3x3, put the goal ON THE START CELL, so the mouse
+        # believed it had already arrived and every route came back empty.
+        self.goal = ((self.cols - 1) // 2, (self.rows - 1) // 2)
 
     def __str__(self):
         return to_ascii(self)
-
-    def copy(self):
-        return MazeStructure(cells=dict(self.cells), cols=self.cols, rows=self.rows)
 
     def generate_empty_maze(self, cols, rows):
         cells = {}
@@ -75,17 +78,6 @@ def file_exists(path_str):
         return True
     except OSError:
         return False
-
-
-def available_mazes(directory_path):
-    """List all .num maze files in a directory."""
-    if not file_exists(directory_path):
-        return []
-    file_list = []
-    for filename in sorted(os.listdir(directory_path)):
-        if filename.endswith(".num"):
-            file_list.append(directory_path.rstrip("/") + "/" + filename)
-    return file_list
 
 
 def to_ascii(maze, path=None, mouse_pos=None):

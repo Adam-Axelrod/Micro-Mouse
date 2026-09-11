@@ -1,6 +1,6 @@
 """Continuous 2D geometry and raycasting engine for the micromouse simulation.
 
-PC-only: the Pico never needs this module (see agent-context architectural tree).
+PC-only: the Pico never needs this module (see Micro-Mouse/Readme.md for the tree).
 It has real sensors returning true environment data directly; there is no
 continuous mm-space maze to derive or raycast against. `maze.py` (MazeStructure)
 is the only maze representation shared with the Pico.
@@ -49,7 +49,7 @@ class MazeGeometry:  # render + collision class, PC-only
     (x or y = k * MM_PER_CELL), not offset to the thick-wall faces. The ~6mm
     simplification is deliberate -- it's under the sensor noise floor, and
     collision is a terminal flag (no push-out), so exact faces aren't needed.
-    See agent-context/00_PROJECT_STORY.md section 12 for the full decision log.
+    See D-003 in Logs/2026-08-15_system-reset.md for the full decision.
     """
 
     def __init__(self, structure):
@@ -188,8 +188,6 @@ class MazeSegments:
         else:
             return (point2, point1)
 
-
-Segment = MazeSegments
 
 
 ### this provides the information to the simulated pin to fabricate a light intensity

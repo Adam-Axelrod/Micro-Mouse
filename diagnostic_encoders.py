@@ -1,7 +1,7 @@
 """Quadrature encoder counter class for Raspberry Pi Pico RP2040 using PIO.
 
 Uses a PIO state machine to decode quadrature encoder signals from motor shaft encoders.
-Hardcoded pin assignments match the Gemini board wiring: left motor = pins 8/9, right motor = pins 6/7.
+Pin assignments come from setup.py (LEFT_ENCODER_A/B, RIGHT_ENCODER_A/B).
 """
 
 import array
@@ -83,21 +83,32 @@ class PIOQuadratureCounter:
 
 class Encoders:
     def __init__(self):
-        self.left_counter = PIOQuadratureCounter(0, 8, 9)
-        self.right_counter = PIOQuadratureCounter(1, 6, 7)
+        # Pin numbers come from setup.py, the hardware boundary, so the encoder
+        # wiring is recorded in the same place as every other pin.
+        import setup
+        self.left_counter = PIOQuadratureCounter(
+            0, setup.LEFT_ENCODER_A, setup.LEFT_ENCODER_B)
+        self.right_counter = PIOQuadratureCounter(
+            1, setup.RIGHT_ENCODER_A, setup.RIGHT_ENCODER_B)
 
         self.left_offset = 0
         self.right_offset = 0
         self.get_counts(reset=True)
 
     def get_counts(self, reset=False):
-        # Both raw counters are negated so that FORWARD wheel motion counts
-        # POSITIVE, which is the sign convention the rest of the firmware
-        # assumes. The right side was bench-measured 2026-08-01 (BT-4/BT-5):
+        # Forward wheel motion must count POSITIVE on both sides; that is the
+        # sign convention the rest of the firmware assumes.
+        #
+        # The RIGHT raw counter is negated. Bench-measured 2026-08-01 (BT-4/BT-5):
         # rolling and driving it forward both gave negative raw counts.
-        # The left side's sign is still UNVERIFIED -- its encoder is dead
-        # (broken J1 signal line), so re-check it after that repair.
-        left_count = -self.left_counter.read() - self.left_offset
+        #
+        # The LEFT is NOT negated, corrected 2026-08-31. It used to be, on an
+        # assumption made while that encoder was dead. The first mode 4 dash that
+        # read both sides settled it: driving both wheels forward gave left
+        # -82136 against right +82294, magnitudes within 0.19%. Same motion,
+        # opposite signs, so the left negation was wrong. (A swapped A/B pair in
+        # the wiring produces the same inversion and the same fix.)
+        left_count = self.left_counter.read() - self.left_offset
         right_count = -self.right_counter.read() - self.right_offset
 
         if reset:

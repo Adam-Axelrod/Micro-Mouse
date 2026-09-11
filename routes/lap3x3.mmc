@@ -1,0 +1,11 @@
+# micromouse route v1
+# maze: blank3x3.num
+F 2
+R
+F 2
+R
+F 2
+R
+F 2
+R
+H

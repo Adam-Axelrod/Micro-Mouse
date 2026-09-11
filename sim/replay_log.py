@@ -5,9 +5,9 @@ closes that gap: take the `motor_log.csv` a hardware run wrote, feed the recorde
 powers back through the same drive_motors path, and step the sim between records
 so the run can be watched (or measured) after the fact.
 
-    python3 replay_log.py                    # headless, prints the reconstructed pose
+    python3 sim/replay_log.py                    # headless, prints the reconstructed pose
     python3 replay_log.py --render           # watch it
-    python3 replay_log.py path/to/other.csv  # a specific trace
+    python3 sim/replay_log.py path/to/other.csv  # a specific trace
 
 What this does and does not tell you: the sim is re-driven by the SAME commands
 the hardware got, so a divergence between the replayed pose and where the robot
@@ -17,17 +17,25 @@ Records hold their power until the next timestamp (the trace is change-only), so
 a replay is only as faithful as the open-loop timing that produced it.
 """
 
+import os
 import sys
 
-import config
-import maze
-import motor_log
-import setup
+# Runnable directly (`python3 sim/replay_log.py`), which puts sim/ on sys.path
+# instead of the package root. Everything below imports from the root, so it has
+# to be added before anything else is imported.
+PACKAGE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PACKAGE_DIR not in sys.path:
+    sys.path.insert(0, PACKAGE_DIR)
+
+import config  # noqa: E402
+import maze  # noqa: E402
+import motor_log  # noqa: E402
+import setup  # noqa: E402
 
 if setup.sim is None:
     raise SystemExit("replay_log.py is PC-only: there is no simulation to replay into.")
 
-import main  # noqa: E402  -- imported for drive_motors, after the sim check
+import drive  # noqa: E402  -- the motor boundary, after the sim check
 
 
 def replay(records, render_object=None, belief=None):
@@ -36,7 +44,7 @@ def replay(records, render_object=None, belief=None):
     dt = config.SIM_TIMESTEP_S
 
     for index, (t_ms, left_power, right_power) in enumerate(records):
-        main.drive_motors(left_power, right_power)
+        drive.drive_motors(left_power, right_power)
 
         # Hold this power until the next record's timestamp. The last record is
         # the end of the trace, so it carries no duration.
@@ -48,10 +56,10 @@ def replay(records, render_object=None, belief=None):
 
         for step_index in range(max(1, round(hold_seconds / dt))):
             setup.sim.step_sim_physics(dt)
-            if render_object is not None and step_index % main.RENDER_EVERY_N_STEPS == 0:
+            if render_object is not None and step_index % drive.RENDER_EVERY_N_STEPS == 0:
                 render_object.draw(belief=belief, mouse=mouse_state)
 
-    main.stop_motors()
+    drive.stop_motors()
     return mouse_state
 
 
@@ -76,9 +84,8 @@ def main_cli():
 
     render_object = None
     if enable_render:
-        import geometry
-        from renderer import Renderer
-        render_object = Renderer(geometry.MazeGeometry(real_maze))
+        from sim.renderer import make_renderer
+        render_object = make_renderer(real_maze)
 
     start = setup.sim.get_mouse_state()
     print(f"start pose: x={start.x_mm:.1f} y={start.y_mm:.1f} heading={start.heading_radians:.3f}")
