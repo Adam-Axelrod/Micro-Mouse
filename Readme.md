@@ -113,7 +113,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`exploration.py`** | Mode 1. Cell-by-cell exploration loop. Simulation only -- see section 2. |
 | **`speed_run.py`** | Mode 2. Loads a belief, plans over it, and executes the verbs as timed open-loop drives. Owns the route, not the motors. |
 | **`bench_test.py`** | Mode 3. The BT-0..BT-8 hardware bring-up checks. Imported lazily by `main.py`; not in the minimal deployment set. |
-| **`max_speed_test.py`** | Modes 4 and 5. One straight dash over a marked distance plus `calibrate()`, and the N-lap stress run. |
+| **`max_speed_test.py`** | Modes 4 and 5. One straight dash over a marked distance, sampling the encoders as it goes so the acceleration ramp and terminal speed come out of a single run. Plus `calibrate()` and the N-lap stress run. |
 | **`motor_log.py`** | Change-only CSV trace of commanded motor powers (format v1). Written on every hardware run, and on `--log` from the PC. |
 | **`diagnostic_encoders.py`** | PIO quadrature encoder counter. Takes its pins from `setup.py` and is reached through `setup.read_encoders()`, never imported directly. |
 | **`groundtruth.num`** | Default ground-truth maze fixture used by PC simulation. |
@@ -128,6 +128,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`sim/geometry.py`** | `MazeGeometry` mm-space wall segments and post polygons, and the `cast_ray()` engine. |
 | **`sim/renderer.py`** | Optional Pygame renderer, plus `make_renderer()` so no mode has to import another mode in order to draw. |
 | **`sim/replay_log.py`** | Re-drives the sim from a Pico `motor_log.csv`. The gap between the replayed pose and where the robot really stopped is the measurement. |
+| **`sim/route_editor.py`** | Draw a route by clicking cells; writes `.mmc`. Refuses a step that is not adjacent or that crosses a wall. |
 
 ---
 
@@ -138,7 +139,27 @@ Run `main.py` directly from the project directory:
 ```bash
 python3 main.py
 ```
-There is no test suite at present: `tests/` was cleared on 2026-09-11 to be rebuilt with divisions by purpose and responsibility. `maze.py`, `explorer.py`, `search_algorithms.py`, `commands.py` and `motor_log.py` still carry runnable inline self-tests (`python3 maze.py`).
+```bash
+python3 tests/run_all.py          # every division
+python3 tests/run_all.py health   # one division by name
+```
+
+Four divisions, each answering one question:
+
+| Division | Question |
+| :--- | :--- |
+| `logic/` | Does the brain compute the right thing? Cells and compass sides. |
+| `hardware/` | Would this hold on the board? The drive boundary and the trace. |
+| `sim/` | Is the simulation's arithmetic right? Kinematics, rays, renderer. |
+| `health/` | Is the repo still well formed? Imports, deployment set, layering. |
+
+`logic`, `hardware` and `health` need no third-party package, because the Pico
+has no pip. `sim` skips itself when pygame is absent. CI runs the suite on 3.10
+and 3.12, again with nothing installed, plus every headless mode and a
+trace-and-replay round trip.
+
+`maze.py`, `explorer.py`, `search_algorithms.py`, `commands.py` and
+`motor_log.py` also carry runnable inline self-tests (`python3 maze.py`).
 
 To replay a hardware trace into the sim:
 ```bash

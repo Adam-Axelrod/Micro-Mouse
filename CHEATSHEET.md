@@ -141,6 +141,7 @@ SW2 will start.
 | 3 | 3 | Bench test — the BT-0..BT-8 bring-up checks |
 | 4 | 4 | Max speed test — one 5.2 m dash at full duty (§5.1) |
 | 5 | 5 | Stress test — N laps of the sprint, then drift (§5.2) |
+| 6 | 6 | Follow route — drive `route.mmc` verbatim, N laps (§5.3) |
 
 Boot lands on mode 1 and blinks once. Each SW1 press steps to the next mode and
 blinks its number; mode 4 wraps back to mode 1. To reach mode 4 from boot,
@@ -263,6 +264,31 @@ the marked 5 m.
 Beware the circular case. On the PC the sim both plans and simulates with
 `MAX_WHEEL_SPEED_MMS`, so `python3 main.py --maxspeed` always lands exactly on
 target. That checks the arithmetic and says nothing about the chassis.
+
+### 5.3 Follow route (mode 6)
+
+Drives `route.mmc` exactly as written, with no planning. Nothing about the
+planner is involved, so a route driven wrongly is the drive layer's fault.
+
+Draw one on the PC, then copy it over:
+
+```bash
+python3 sim/route_editor.py mazes/test_mazes/blank3x3.num   # click cells, s to save
+mpremote cp route.mmc :
+```
+
+Laps are the maze-relevant drift test. Every lap should return the robot to its
+start pose, so the offset after N laps is the accumulated open-loop error, and
+unlike §5.2 the turn error accumulates instead of cancelling.
+
+```python
+import speed_run; speed_run.follow(laps=10)
+```
+
+The route must end on the heading it started on or lap 2 sets off sideways. A
+drawn route never does: `path_to_commands` derives turns from cell transitions,
+so it always ends on a drive. Append the closing turn by hand — see
+`routes/lap3x3.mmc`. Both the editor and mode 6 warn when it is missing.
 
 ### 5.2 Stress test (mode 5)
 
@@ -436,9 +462,13 @@ corrected. Expect real drift.
 
 ## 8. PC-side tests
 
-**There is no test suite right now.** `tests/` was cleared on 2026-09-11 to be
-rebuilt with divisions by purpose and responsibility. Until it exists, a run is
-the only evidence.
+```bash
+python3 tests/run_all.py          # every division
+python3 tests/run_all.py health   # logic | hardware | sim | health
+```
 
-Inline self-tests, all still runnable: `python3 maze.py`, `python3 explorer.py`,
+`health` is the one to run after moving anything: it catches a call to a symbol
+that moved, a deployment set that would not boot, and pygame escaping `sim/`.
+
+Inline self-tests: `python3 maze.py`, `python3 explorer.py`,
 `python3 search_algorithms.py`, `python3 commands.py`, `python3 motor_log.py`.
