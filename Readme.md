@@ -138,12 +138,7 @@ Run `main.py` directly from the project directory:
 ```bash
 python3 main.py
 ```
-To run the test suites:
-```bash
-python3 tests/test_physics_sim.py     # physics, sensors, turn verbs
-python3 tests/test_max_speed_test.py  # mode 4 timing and logging
-python3 tests/test_stress_test.py     # mode 5 drift accounting
-```
+There is no test suite at present: `tests/` was cleared on 2026-09-11 to be rebuilt with divisions by purpose and responsibility. `maze.py`, `explorer.py`, `search_algorithms.py`, `commands.py` and `motor_log.py` still carry runnable inline self-tests (`python3 maze.py`).
 
 To replay a hardware trace into the sim:
 ```bash

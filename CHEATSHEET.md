@@ -436,10 +436,9 @@ corrected. Expect real drift.
 
 ## 8. PC-side tests
 
-```bash
-python3 tests/test_physics_sim.py
-python3 tests/test_max_speed_test.py
-```
+**There is no test suite right now.** `tests/` was cleared on 2026-09-11 to be
+rebuilt with divisions by purpose and responsibility. Until it exists, a run is
+the only evidence.
 
-Inline self-tests: `python3 maze.py`, `python3 explorer.py`,
-`python3 search_algorithms.py`, `python3 commands.py`.
+Inline self-tests, all still runnable: `python3 maze.py`, `python3 explorer.py`,
+`python3 search_algorithms.py`, `python3 commands.py`, `python3 motor_log.py`.
