@@ -66,8 +66,8 @@ the directory runs headless, which is what it does today.
   * **On PC**: Loads desktop mock `sim_machine.py`, which integrates differential-drive physics and sensor raycasting.
 * **Discrete Belief vs. Continuous Geometry**:
   * `MazeStructure` (`maze.py`): Lightweight grid representation `(x, y): (N, E, S, W)` used as the internal belief map on both PC and Pico.
-  * `MazeGeometry` (`geometry.py`): Continuous $mm$-space raycasting physics used **only on PC** for simulation.
-* **`main.py` is a dispatcher and nothing else**: it registers the five modes, reads SW1/SW2 or a CLI flag, opens the motor trace around the run, and hands off. The behaviour lives in the mode modules.
+  * `MazeGeometry` (`sim/geometry.py`): Continuous $mm$-space raycasting physics used **only on PC** for simulation.
+* **`main.py` is a dispatcher and nothing else**: it registers the six modes, reads SW1/SW2 or a CLI flag, opens the motor trace around the run, and hands off. The behaviour lives in the mode modules.
 * **One motor boundary (`drive.py`)**: every mode moves a wheel through `drive_motors(left, right)` with signed power in `[-1.0, 1.0]`. No mode imports another mode to get a driver.
 
 ---
@@ -95,6 +95,8 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
    * N laps of the sprint (default 20 × 5 m, ~11 min), reversing between legs, then reports accumulated drift.
    * Reversing cancels symmetric error, so it measures asymmetry, encoder dropout and battery sag. `turn_around=True` pivots 180° instead, letting distance and turn error accumulate.
    * Either button aborts between legs.
+6. **Mode 6: Follow Route (`--follow`)**:
+   * Drives `route.mmc` verbatim, open-loop. No planning; tests the drive layer. Drawn with `sim/route_editor.py`.
 
 ---
 
@@ -117,7 +119,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`motor_log.py`** | Change-only CSV trace of commanded motor powers (format v1). Written on every hardware run, and on `--log` from the PC. |
 | **`diagnostic_encoders.py`** | PIO quadrature encoder counter. Takes its pins from `setup.py` and is reached through `setup.read_encoders()`, never imported directly. |
 | **`groundtruth.num`** | Default ground-truth maze fixture used by PC simulation. |
-| **`belief.num`** | The map a speed run drives. Written by mode 1, and the hand-authored input for a known-map run on hardware. |
+| **`belief.num`** | Untracked working file (gitignored): the current map the robot drives. Written by mode 1; hand-authored file used by mode 2 on hardware. Not committed; fixtures live under `mazes/`. |
 
 ### PC-only (`sim/`) -- never deployed to the Pico
 
