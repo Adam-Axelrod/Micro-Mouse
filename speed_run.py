@@ -96,13 +96,18 @@ def load_and_plan_route(belief_file_path=None, start_heading=config.DIRECTIONS[0
 
 
 def _sim_world(map_path=None, enable_render=False):
-    """Load the maze the sim and the renderer should use. Returns a Renderer or None."""
+    """Load the maze the sim and the renderer should use.
+
+    Returns (render_object, real_maze); either may be None. The maze comes back
+    as well as the renderer because a caller with no belief map of its own still
+    has to give the renderer something to draw.
+    """
     if not (HAS_SIM or enable_render):
-        return None
+        return None, None
     real_maze = maze.MazeStructure(*maze.num_file_import(map_path or config.DEFAULT_MAZE))
     if HAS_SIM:
         setup.sim.set_sim_maze(real_maze)
-    return make_renderer(real_maze) if enable_render else None
+    return (make_renderer(real_maze) if enable_render else None), real_maze
 
 
 def follow(route_path=None, map_path=None, laps=None, enable_render=False):
@@ -143,7 +148,7 @@ def follow(route_path=None, map_path=None, laps=None, enable_render=False):
     drive.start_trace()
     drive.blink_led(6, 80)
 
-    render_object = _sim_world(map_path, enable_render)
+    render_object, real_maze = _sim_world(map_path, enable_render)
 
     ticks_before = setup.read_encoders(reset=True)
     if ticks_before is None:
@@ -153,7 +158,7 @@ def follow(route_path=None, map_path=None, laps=None, enable_render=False):
     for lap in range(laps):
         if laps > 1:
             print("--- lap {} of {}".format(lap + 1, laps))
-        execute_movement_commands(movement_commands, render_object, None, None)
+        execute_movement_commands(movement_commands, render_object, real_maze, None)
 
         ticks = setup.read_encoders()
         if ticks is not None:
@@ -208,7 +213,7 @@ def run(enable_render=False):
     route, movement_commands, belief = load_and_plan_route()
     print(f"Optimal cell path ({len(route)} cells): {route}")
 
-    render_object = _sim_world(enable_render=enable_render)
+    render_object, _real_maze = _sim_world(enable_render=enable_render)
 
     execute_movement_commands(movement_commands, render_object, belief, route)
 

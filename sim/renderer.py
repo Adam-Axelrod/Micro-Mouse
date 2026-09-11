@@ -32,9 +32,14 @@ class Renderer:
         self.maze = maze
         self.maze_height_mm = self.maze.structure.rows * config.MM_PER_CELL
         self.scale = int(config.TILE_PX)
-        self.screen = pygame.display.set_mode((maze.structure.cols * self.scale + 2 * self.offset,
-             maze.structure.rows * self.scale + 2 * self.offset))
+        # The margin is assigned BEFORE set_mode uses it. It was the other way
+        # round briefly, which made every Renderer raise AttributeError; the
+        # exception went unseen because make_renderer catches it and carries on
+        # headless, and no automated run passes --render.
         self.offset = config.RENDER_MARGIN_PX
+        self.screen = pygame.display.set_mode(
+            (maze.structure.cols * self.scale + 2 * self.offset,
+             maze.structure.rows * self.scale + 2 * self.offset))
         self.clock = pygame.time.Clock()        # display throttle
         pygame.display.set_caption("Micro-Mouse")
 
@@ -149,6 +154,14 @@ class Renderer:
         return (x, y, w, h)
 
     def belief_state(self, orientation, key, belief):
+        """Has the belief map recorded this wall? No belief = nothing known yet.
+
+        Mode 6 follows a route file, which carries no walls, so a caller may
+        legitimately have no belief to draw. That renders every wall as unknown
+        rather than raising.
+        """
+        if belief is None:
+            return False
         if orientation == "H":
             span_col, line_row = key
             cell_above = belief.cells.get((span_col, line_row))
