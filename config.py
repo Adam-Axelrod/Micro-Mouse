@@ -110,6 +110,10 @@ MAX_WHEEL_SPEED_MMS = 681.0
 CRUISE_DUTY_POWER = 0.55
 TURN_DUTY_POWER = 0.40
 
+# Brake held between two movement verbs, so a pivot does not start while the
+# chassis is still rocking from the drive before it (s).
+INTER_COMMAND_SETTLE_S = 0.1
+
 # Fixed simulation timestep (s). The sim is deterministic in this step, not in
 # wall-clock time; the renderer samples it but never sets it.
 SIM_TIMESTEP_S = 0.01
@@ -134,3 +138,21 @@ SENSOR_DISTANCE_OFFSET_MM = 15.0 # emitter-to-target standoff in the 1/d^2 law
 # Render-only pixel scale
 PX_PER_MM = 0.25
 TILE_PX = MM_PER_CELL * PX_PER_MM
+
+# Render-only, PC-only. Every one of these was a literal inside renderer.py,
+# against invariant 5. They are here so the invariant holds without an exception,
+# not because the Pico will ever read them -- `sim/renderer.py` is the only
+# consumer and it never goes on the board.
+RENDER_MARGIN_PX = 10            # blank border around the maze (px)
+RENDER_FPS = 60                  # display throttle, never gates physics (fps)
+RENDER_PATH_STEP_DELAY_S = 0.05  # per-cell delay when animating a planned route (s)
+RENDER_DONE_STEP_DELAY_S = 0.025 # per-cell delay when animating the walked path (s)
+RENDER_MOUSE_OUTLINE_PX = 2      # chassis outline and nose line width (px)
+
+RENDER_BACKGROUND = (0, 0, 0)
+RENDER_WALL_KNOWN = (255, 255, 255)    # a wall the belief map has recorded
+RENDER_WALL_UNKNOWN = (80, 80, 80)     # a wall in the truth the belief has not seen
+RENDER_TILE_DONE = (0, 180, 160)       # cells already walked
+RENDER_TILE_PATH = (0, 90, 80)         # cells on the current plan
+RENDER_MOUSE_BODY = (220, 60, 60)      # chassis outline
+RENDER_MOUSE_NOSE = (255, 200, 0)      # heading line

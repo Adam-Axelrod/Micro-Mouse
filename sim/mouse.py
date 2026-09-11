@@ -5,7 +5,7 @@ mapping for the simulated reflective sensors.
 
 import math
 import config
-from geometry import cast_ray
+from sim.geometry import cast_ray
 
 
 class MouseState:

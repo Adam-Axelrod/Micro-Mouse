@@ -9,3 +9,4 @@ __pycache__/
 motor_log.csv
 max_speed_test.csv
 stress_test.csv
+.lavish/

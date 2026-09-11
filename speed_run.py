@@ -1,124 +1,42 @@
-"""Speed Run Mode for UKMARS Gemini Micromouse.
+"""Speed Run Mode (mode 2) for UKMARS Gemini Micromouse.
 
-Loads explored belief map, flood-fills optimal route, and executes movement commands.
-Pico and PC compatible.
+Loads the explored belief map, flood-fills the optimal route, and executes the
+resulting movement commands. Pico and PC compatible.
+
+This module owns the ROUTE: loading a belief, planning over it, and turning
+egocentric verbs into timed drives. It does not own the motors -- `drive.py`
+does. Anything that only needs to move a wheel should import `drive`, not this.
 """
 
-import math
-import time
 import commands
 import config
+import drive
 import maze
-import motor_log
 import search_algorithms
 import setup
 
-# Optional PC-only Pygame renderer imports
+# Rendering is PC-only and optional. The `sim` package is never deployed to the
+# board, so on the Pico this import fails and every mode runs headless.
 try:
-    import geometry
-    from renderer import Renderer
-    HAS_PYGAME = True
+    from sim.renderer import make_renderer
 except ImportError:
-    HAS_PYGAME = False
+    def make_renderer(real_maze):
+        return None
 
 HAS_SIM = setup.sim is not None
 
-CRUISE_DUTY_POWER = config.CRUISE_DUTY_POWER
-TURN_DUTY_POWER = config.TURN_DUTY_POWER
-RENDER_EVERY_N_STEPS = 4
-
-MOTOR_TRACE = motor_log.MotorLog(
-    config.MOTOR_LOG_PATH,
-    clock_ms=setup.sim.sim_time_ms if setup.sim is not None else None,
-)
-
-
-def blink_led(times, on_duration_ms=80, off_duration_ms=80):
-    for _ in range(times):
-        setup.LED_PIN.value(1)
-        time.sleep(on_duration_ms / 1000.0)
-        setup.LED_PIN.value(0)
-        time.sleep(off_duration_ms / 1000.0)
-
-
-def drive_motors(left_power, right_power):
-    """Active-low driver for dual PWM channels per motor: power in [-1.0, 1.0]."""
-    left_p = max(-1.0, min(1.0, left_power))
-    right_p = max(-1.0, min(1.0, right_power))
-
-    MOTOR_TRACE.record(left_p, right_p)
-
-    maxspeed = 65535
-    if left_p >= 0:
-        setup.leftRev.duty_u16(maxspeed)
-        setup.leftFwd.duty_u16(int(maxspeed * (1.0 - left_p)))
-    else:
-        setup.leftFwd.duty_u16(maxspeed)
-        setup.leftRev.duty_u16(int(maxspeed * (1.0 - abs(left_p))))
-
-    if right_p >= 0:
-        setup.rightRev.duty_u16(maxspeed)
-        setup.rightFwd.duty_u16(int(maxspeed * (1.0 - right_p)))
-    else:
-        setup.rightFwd.duty_u16(maxspeed)
-        setup.rightRev.duty_u16(int(maxspeed * (1.0 - abs(right_p))))
-
-
-def stop_motors():
-    MOTOR_TRACE.record(0.0, 0.0)
-    maxspeed = 65535
-    setup.leftFwd.duty_u16(maxspeed)
-    setup.leftRev.duty_u16(maxspeed)
-    setup.rightFwd.duty_u16(maxspeed)
-    setup.rightRev.duty_u16(maxspeed)
-
-
-def run_motion_for(duration_seconds, render_object=None, belief=None, route=None):
-    """Let time pass while the motors drive."""
-    if not HAS_SIM:
-        time.sleep(duration_seconds)
-        return
-
-    dt = config.SIM_TIMESTEP_S
-    # Whole steps plus the leftover. Rounding to whole steps instead put a
-    # systematic error on every short move -- a 0.216 s pivot became 0.22 s and
-    # turned 91.6 degrees -- which would show up as sim/hardware divergence that
-    # the hardware had not actually caused.
-    total_steps = int(duration_seconds / dt)
-    remainder = duration_seconds - total_steps * dt
-    for step_index in range(total_steps):
-        setup.sim.step_sim_physics(dt)
-        if render_object is not None and (
-            step_index % RENDER_EVERY_N_STEPS == 0 or step_index == total_steps - 1
-        ):
-            render_object.draw(belief=belief, mouse=setup.sim.get_mouse_state(), path=route)
-
-    if remainder > 0.0:
-        setup.sim.step_sim_physics(remainder)
-
-
-def pivot_in_place(quarter_turns, clockwise=True, render_object=None, belief=None, route=None):
-    """Spin on the spot through `quarter_turns` x 90 degrees.
-
-    The power is FIXED at TURN_DUTY_POWER and only the duration scales with the
-    angle. Scaling both is what made a U-turn rotate 360 degrees: it drove at
-    2 x TURN_DUTY_POWER, so it spun twice as fast for the time a 180 needed at
-    the base rate. Corrected 2026-08-31.
-    """
-    pivot_rate_rads = 2.0 * TURN_DUTY_POWER * config.MAX_WHEEL_SPEED_MMS / config.TRACK_WIDTH_MM
-    pivot_time_seconds = (math.pi / 2.0) * quarter_turns / pivot_rate_rads
-
-    sign = 1.0 if clockwise else -1.0
-    drive_motors(sign * TURN_DUTY_POWER, -sign * TURN_DUTY_POWER)
-    run_motion_for(pivot_time_seconds, render_object, belief, route)
-    stop_motors()
-
 
 def execute_movement_commands(movement_commands, render_object=None, belief=None, route=None):
-    """Execute egocentric movement verbs: F n, L, R, U, H."""
+    """Execute egocentric movement verbs: F n, L, R, U, H.
+
+    Open loop. Each verb becomes a fixed power held for a computed number of
+    seconds, and no encoder is read while it runs. Distance divides by one
+    constant speed, so nothing here models the acceleration ramp -- see the
+    MAX_WHEEL_SPEED_MMS comment in config.py before trusting a short move.
+    """
     print(f"Executing movement route: {movement_commands}")
 
-    cruise_speed_mms = CRUISE_DUTY_POWER * config.MAX_WHEEL_SPEED_MMS
+    cruise_speed_mms = drive.CRUISE_DUTY_POWER * config.MAX_WHEEL_SPEED_MMS
 
     for command_string in movement_commands:
         if not command_string or command_string.startswith("#"):
@@ -128,33 +46,33 @@ def execute_movement_commands(movement_commands, render_object=None, belief=None
         verb = parts[0]
         arg = int(parts[1]) if len(parts) > 1 else None
 
-        if verb == "F":
+        if verb == commands.FORWARD:
             cells_to_drive = arg
             target_distance_mm = cells_to_drive * config.MM_PER_CELL
             drive_time_seconds = target_distance_mm / cruise_speed_mms
 
-            drive_motors(CRUISE_DUTY_POWER, CRUISE_DUTY_POWER)
-            run_motion_for(drive_time_seconds, render_object, belief, route)
-            stop_motors()
+            drive.drive_motors(drive.CRUISE_DUTY_POWER, drive.CRUISE_DUTY_POWER)
+            drive.run_motion_for(drive_time_seconds, render_object, belief, route)
+            drive.stop_motors()
 
-        elif verb in ("L", "R", "U"):
+        elif verb in (commands.LEFT, commands.RIGHT, commands.UTURN):
             # quarter turns, and which way round. A U-turn takes the same
             # direction as R; on the spot either way lands the same heading.
-            if verb == "L":
+            if verb == commands.LEFT:
                 quarter_turns, clockwise = 1, False
-            elif verb == "R":
+            elif verb == commands.RIGHT:
                 quarter_turns, clockwise = 1, True
             else:
                 quarter_turns, clockwise = 2, True
 
-            pivot_in_place(quarter_turns, clockwise, render_object, belief, route)
+            drive.pivot_in_place(quarter_turns, clockwise, render_object, belief, route)
 
-        elif verb == "H":
-            stop_motors()
+        elif verb == commands.HALT:
+            drive.stop_motors()
             print("Route completed successfully!")
             break
 
-        run_motion_for(0.1, render_object, belief, route)
+        drive.run_motion_for(config.INTER_COMMAND_SETTLE_S, render_object, belief, route)
 
 
 def load_and_plan_route(belief_file_path=None, start_heading=config.DIRECTIONS[0]):
@@ -178,22 +96,19 @@ def load_and_plan_route(belief_file_path=None, start_heading=config.DIRECTIONS[0
 def run(enable_render=False):
     """Run speed run mode."""
     print("=== STARTING SPEED RUN MODE ===")
-    blink_led(5, on_duration_ms=80, off_duration_ms=80)
+    drive.start_trace()
+    drive.blink_led(5, 80)
 
     route, movement_commands, belief = load_and_plan_route()
     print(f"Optimal cell path ({len(route)} cells): {route}")
 
     render_object = None
-    want_render = HAS_PYGAME and enable_render
-    if HAS_SIM or want_render:
+    if HAS_SIM or enable_render:
         real_maze = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE))
         if HAS_SIM:
             setup.sim.set_sim_maze(real_maze)
-        if want_render:
-            try:
-                render_object = Renderer(geometry.MazeGeometry(real_maze))
-            except Exception as exc:
-                print(f"Renderer init failed ({type(exc).__name__}: {exc}); continuing without rendering.")
+        if enable_render:
+            render_object = make_renderer(real_maze)
 
     execute_movement_commands(movement_commands, render_object, belief, route)
 

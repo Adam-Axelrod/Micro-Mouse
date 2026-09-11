@@ -8,9 +8,9 @@ simulated phototransistor light intensity values via raycasting.
 
 import math
 import config
-from geometry import MazeGeometry
 from maze import MazeStructure
-from mouse import MouseState
+from sim.geometry import MazeGeometry
+from sim.mouse import MouseState
 
 
 class HardwareSimulation:

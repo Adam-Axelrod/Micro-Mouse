@@ -189,8 +189,6 @@ class MazeSegments:
             return (point2, point1)
 
 
-Segment = MazeSegments
-
 
 ### this provides the information to the simulated pin to fabricate a light intensity
 ### the neural net will in effect be doing this in its hidden layers should we provide the sensors as input

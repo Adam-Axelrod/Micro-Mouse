@@ -44,7 +44,7 @@ import math
 import time
 
 import config
-import main
+import drive
 import setup
 
 # --------------------------------------------------------------------------------------
@@ -183,10 +183,10 @@ def _pulse(left_power, right_power, duration_ms, label):
     print("  -> {}: drive_motors({:+.2f}, {:+.2f}) for {} ms".format(
         label, left_power, right_power, duration_ms))
     try:
-        main.drive_motors(left_power, right_power)
+        drive.drive_motors(left_power, right_power)
         time.sleep_ms(duration_ms)
     finally:
-        main.stop_motors()
+        drive.stop_motors()
     time.sleep_ms(SETTLE_MS)
 
 
@@ -257,7 +257,7 @@ def bt0_boot():
     _record("BT-0.platform", "PASS", "MicroPython machine module present")
 
     print("  Onboard LED: 3 blinks.")
-    main.blink_led(3)
+    drive.blink_led(3)
 
     indicators = (
         ("leftSensorLED", setup.leftSensorLED),
@@ -387,10 +387,10 @@ def bt3_brake_vs_coast():
 
     _pause("spinning up, then cutting to both-channels-65535 -- watch the wheels")
     print("  -> spinning up")
-    main.drive_motors(BENCH_DUTY_POWER, BENCH_DUTY_POWER)
+    drive.drive_motors(BENCH_DUTY_POWER, BENCH_DUTY_POWER)
     time.sleep_ms(MAX_PULSE_MS)
     print("  -> cut (stop_motors)")
-    main.stop_motors()
+    drive.stop_motors()
 
     braked = _ask("Did the wheels stop DEAD? (n = they freewheeled to a stop)")
     if braked is None:
@@ -595,7 +595,7 @@ def spin_check(power=BENCH_DUTY_POWER, timeout_ms=400, settle_ms=500):
                 print("  {:>5} motor -> NO ENCODER FEEDBACK ({} ticks) -- suspect this channel's trace".format(name, moved))
             time.sleep_ms(settle_ms)
     finally:
-        main.stop_motors()
+        drive.stop_motors()
 
 
 def encoder_fault_menu():
@@ -901,11 +901,11 @@ def run_all():
         try:
             check()
         except KeyboardInterrupt:
-            main.stop_motors()
+            drive.stop_motors()
             print("  Interrupted -- motors stopped.")
             _record(title.split()[0], "SKIP", "interrupted")
         except Exception as exc:
-            main.stop_motors()
+            drive.stop_motors()
             _record(title.split()[0], "FAIL", "raised: {}".format(exc))
     summary()
 

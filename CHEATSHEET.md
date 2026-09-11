@@ -15,7 +15,7 @@ that disagrees.
 |---|---|
 | pin 3 = left forward, pin 2 = left reverse | BT-2 raw-channel sweep |
 | pin 4 = right forward, pin 5 = right reverse | BT-2 raw-channel sweep |
-| `drive_motors(+, +)` drives both wheels forward | BT-2 |
+| `drive.drive_motors(+, +)` drives both wheels forward | BT-2 |
 | Both PWM channels at 65535 = **brake** (stops dead, no coast) | BT-3 |
 | Buttons: SW1 = pin 15 (mode selector: 1=explore, 2=speed run, 3=bench test), SW2 = pin 14 (mode execute), active low | BT-1 |
 | Sensors respond to a wall: L +2289, F +4427, R +2292 counts | BT-6 |
@@ -29,19 +29,23 @@ Minimal deployment set (`CLAUDE.md` §Dual-target). Anything importing `pygame`
 or `geometry` must never go on the board:
 
 ```
-main.py setup.py config.py maze.py explorer.py exploration.py speed_run.py
-search_algorithms.py commands.py motor_log.py max_speed_test.py
+main.py setup.py config.py drive.py maze.py explorer.py exploration.py
+speed_run.py search_algorithms.py commands.py motor_log.py max_speed_test.py
 diagnostic_encoders.py  +  belief.num
 ```
 
 `diagnostic_encoders.py` is now part of the base set: `setup.py` loads it on
-first encoder read. Add for hardware work: `bench_test.py`.
+first encoder read. Add for hardware work: `bench_test.py` — `main.py` imports
+it lazily, so the set above boots without it.
+
+`drive.py` is the motor boundary: every mode drives through it. The whole `sim/`
+directory is PC-only and must never go on the board.
 
 With `mpremote` (the VS Code MicroPico extension does the same thing via its
 "Upload project" command):
 
 ```bash
-mpremote cp main.py setup.py config.py maze.py explorer.py exploration.py speed_run.py search_algorithms.py commands.py motor_log.py max_speed_test.py diagnostic_encoders.py belief.num :
+mpremote cp main.py setup.py config.py drive.py maze.py explorer.py exploration.py speed_run.py search_algorithms.py commands.py motor_log.py max_speed_test.py diagnostic_encoders.py belief.num :
 ```
 
 ```bash
@@ -65,6 +69,10 @@ Type this at a genuine `>>>` prompt:
 ```python
 import main; main.stop_motors()
 ```
+
+`main.stop_motors` is an alias for `drive.stop_motors`, which is where the motor
+contract actually lives. `import drive; drive.stop_motors()` does the same thing
+and is one import lighter.
 
 Note: if a script is sitting at an `input()` prompt, typing that line just
 feeds it as *text* to the prompt — it does not execute. Interrupt first
@@ -96,7 +104,7 @@ Single checks: `bench_test.bt2_motor_polarity()` etc.
 | BT-8 | track width | no |
 
 Powered checks demand you confirm the wheels are off the ground, cap every
-pulse at 1.2 s / 0.45 duty, and always end in `stop_motors()`.
+pulse at 1.2 s / 0.45 duty, and always end in `drive.stop_motors()`.
 
 Order matters: BT-2 before BT-5 (a pairing failure is ambiguous between dead
 motor and dead encoder unless polarity is known), BT-7 before BT-8 (track
@@ -143,7 +151,11 @@ back to mode 1.
 > `groundtruth.num` (not deployed to the Pico) and returns all four sides. On
 > hardware, use speed run with a hand-authored `belief.num`.
 
-Every Pico run traces commanded motor powers to `motor_log.csv` automatically.
+Every Pico run traces commanded motor powers to `motor_log.csv` automatically:
+`main.py` opens the trace before dispatching a mode and closes it after. Starting
+a mode straight from the REPL bypasses `main`, so `max_speed_test.run()` and
+`.stress()` open the trace themselves. Anything else run by hand needs
+`import drive; drive.start_trace(force=True)` first.
 
 On the PC:
 
@@ -154,7 +166,14 @@ python3 main.py --step     # mode 1, exploration
 python3 main.py --bench    # mode 3, bench test (Pico only)
 python3 main.py --maxspeed # mode 4, max speed test
 python3 main.py --stress   # mode 5, stress test
-python3 main.py --log      # also write a motor trace
+python3 main.py --log      # also write a motor trace (automatic on hardware)
+```
+
+Replay a hardware trace into the PC sim:
+
+```bash
+python3 sim/replay_log.py            # headless, prints the reconstructed pose
+python3 sim/replay_log.py --render   # watch it
 ```
 
 ---

@@ -9,10 +9,10 @@ if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
 import config
-from geometry import Segment, cast_ray
 from maze import MazeStructure, num_file_import
-from mouse import MouseState
-from sim_machine import set_sim_maze, step_sim_physics, get_mouse_state
+from sim.geometry import MazeSegments, cast_ray
+from sim.mouse import MouseState
+from sim.sim_machine import set_sim_maze, step_sim_physics, get_mouse_state
 
 
 def test_kinematics_straight():
@@ -97,11 +97,11 @@ def test_setup_and_hardware_sim():
     mstate = get_mouse_state()
     mstate.reset_pose(x_mm=90.0, y_mm=90.0, heading_radians=math.pi / 2.0)
 
-    val_left = setup.Lsidesense.read_u16()
+    val_left = setup.leftSensor.read_u16()
     assert val_left > 200, f"Expected left wall hit, got {val_left}"
 
-    setup.LMOTOR_PWM.duty_u16(32768)
-    setup.RMOTOR_PWM.duty_u16(32768)
+    setup.leftFwd.duty_u16(32768)
+    setup.rightFwd.duty_u16(32768)
 
     initial_y = mstate.y_mm
     step_sim_physics(delta_time_seconds=0.1)
@@ -119,6 +119,7 @@ def test_turn_verbs_hit_their_angles():
     the way it started. A route with a U in it went straight on.
     """
     import math
+    import drive
     import speed_run
 
     state = get_mouse_state()

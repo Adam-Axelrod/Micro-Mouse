@@ -147,7 +147,7 @@ def test_motor_polarity_is_untouched():
 
     Driving pin 3 alone runs the LEFT wheel forward (bench-confirmed, BT-2).
     """
-    import speed_run
+    import drive
 
     assert setup.leftFwd.pin.id == 3
     assert setup.leftRev.pin.id == 2
@@ -157,22 +157,22 @@ def test_motor_polarity_is_untouched():
     state = setup.sim.get_mouse_state()
     state.reset_pose(0.0, 0.0, math.pi / 2.0)  # facing north
 
-    speed_run.drive_motors(0.5, 0.5)
+    drive.drive_motors(0.5, 0.5)
     setup.sim.step_sim_physics(0.1)
-    speed_run.stop_motors()
+    drive.stop_motors()
     assert state.y_mm > 0.0, "positive power must drive forward"
 
     state.reset_pose(0.0, 0.0, math.pi / 2.0)
-    speed_run.drive_motors(-0.5, -0.5)
+    drive.drive_motors(-0.5, -0.5)
     setup.sim.step_sim_physics(0.1)
-    speed_run.stop_motors()
+    drive.stop_motors()
     assert state.y_mm < 0.0, "negative power must drive backward"
 
     # Right wheel faster than left turns to the left (CCW, heading increases).
     state.reset_pose(0.0, 0.0, 0.0)
-    speed_run.drive_motors(0.0, 0.5)
+    drive.drive_motors(0.0, 0.5)
     setup.sim.step_sim_physics(0.1)
-    speed_run.stop_motors()
+    drive.stop_motors()
     assert 0.0 < state.heading_radians < math.pi, state.heading_radians
     print("✓ test_motor_polarity_is_untouched passed")
 

@@ -13,8 +13,11 @@ try:
     IS_HARDWARE = True   # real MicroPython machine module (Pico)
     sim = None           # no simulation engine on hardware
 except ImportError:
-    import sim_machine as sim
-    from sim_machine import Pin, ADC, PWM
+    # PC only. `sim` is the package of never-deployed modules; `sim.sim_machine`
+    # is the mock inside it, and it is what the rest of the project calls
+    # `setup.sim`.
+    from sim import sim_machine as sim
+    from sim.sim_machine import Pin, ADC, PWM
     IS_HARDWARE = False  # PC: the sim engine stands in for the hardware
 
 # Motor PWM pins (2 PWM channels per motor; active low: 65535 = OFF, lower = faster)
@@ -100,15 +103,3 @@ def read_encoders(reset=False):
     if encoders is None:
         return None
     return encoders.get_counts(reset=reset)
-
-
-# Backward-compatibility aliases
-btn1 = leftButton
-Switch = rightButton
-Lsidesense = leftSensor
-Lfrontsense = frontSensor
-Rfrontsense = frontSensor
-Rsidesense = rightSensor
-LMOTOR_PWM = leftFwd
-RMOTOR_PWM = rightFwd
-

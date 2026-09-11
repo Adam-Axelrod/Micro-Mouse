@@ -33,9 +33,9 @@ import math
 import time
 
 import config
+import drive
 import maze
 import setup
-import speed_run
 
 HAS_SIM = setup.sim is not None
 
@@ -73,13 +73,9 @@ LAST_RUN = None
 ENCODER_TOLERANCE = 0.02
 
 
-def _blink(times, on_ms, off_ms=None):
-    off_ms = on_ms if off_ms is None else off_ms
-    for _ in range(times):
-        setup.LED_PIN.value(1)
-        time.sleep(on_ms / 1000.0)
-        setup.LED_PIN.value(0)
-        time.sleep(off_ms / 1000.0)
+# One blink implementation for the whole project; this is the local alias so the
+# call sites below read the same as they always did.
+_blink = drive.blink_led
 
 
 def _append_log_row(row_text):
@@ -124,6 +120,7 @@ def plan(distance_mm=None, power=None):
 def run(distance_mm=None, power=None, enable_render=False):
     """Drive one straight dash at full duty, brake hard, and report the timing."""
     distance_mm, power, assumed_speed_mms, commanded_seconds = plan(distance_mm, power)
+    drive.start_trace()
 
     print("=== MAX SPEED TEST ===")
     print("Clear a straight lane of at least {:.2f} m.".format((distance_mm + 500.0) / 1000.0))
@@ -152,9 +149,9 @@ def run(distance_mm=None, power=None, enable_render=False):
     setup.LED_PIN.value(1)
     start_ms = _now_ms()
 
-    speed_run.drive_motors(power, power)
-    speed_run.run_motion_for(commanded_seconds)
-    speed_run.stop_motors()
+    drive.drive_motors(power, power)
+    drive.run_motion_for(commanded_seconds)
+    drive.stop_motors()
 
     measured_seconds = _diff_ms(_now_ms(), start_ms) / 1000.0
     setup.LED_PIN.value(0)
@@ -333,13 +330,13 @@ def _stress_leg(distance_mm, power, direction, render_object=None, turn_around=F
     before = setup.read_encoders()
     signed_power = power if turn_around else direction * power
 
-    speed_run.drive_motors(signed_power, signed_power)
-    speed_run.run_motion_for(commanded_seconds, render_object)
-    speed_run.stop_motors()
+    drive.drive_motors(signed_power, signed_power)
+    drive.run_motion_for(commanded_seconds, render_object)
+    drive.stop_motors()
 
     if turn_around:
         time.sleep(config.STRESS_TEST_SETTLE_S)
-        speed_run.pivot_in_place(2, clockwise=True, render_object=render_object)
+        drive.pivot_in_place(2, clockwise=True, render_object=render_object)
 
     after = setup.read_encoders()
     if before is None or after is None:
@@ -398,6 +395,8 @@ def stress(laps=None, distance_mm=None, power=None, turn_around=False,
         distance_mm = config.STRESS_TEST_DISTANCE_MM
     if power is None:
         power = config.STRESS_TEST_POWER
+
+    drive.start_trace()
 
     _, _, assumed_speed_mms, leg_seconds = plan(distance_mm, power)
     total_seconds = laps * 2 * (leg_seconds + config.STRESS_TEST_SETTLE_S)
@@ -477,7 +476,7 @@ def stress(laps=None, distance_mm=None, power=None, turn_around=False,
             aborted = True
             break
 
-    speed_run.stop_motors()
+    drive.stop_motors()
     if log is not None:
         log.close()
     _blink(3, 400, 400)

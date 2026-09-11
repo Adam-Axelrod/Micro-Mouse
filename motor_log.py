@@ -75,6 +75,10 @@ class MotorLog:
         self.records_written = 0
         return self
 
+    def is_recording(self):
+        """True once start() has opened the file and before close()."""
+        return self._file is not None
+
     def record(self, left_power, right_power):
         """Note a commanded power pair. Writes only if it differs from the last."""
         if self._file is None:

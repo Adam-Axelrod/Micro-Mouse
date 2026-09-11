@@ -1,10 +1,27 @@
 import math
-import pygame
 import time
+
+import pygame
 
 import config
 import maze
-import geometry
+from sim import geometry
+
+def make_renderer(real_maze):
+    """A Renderer for `real_maze`, or None if the display will not start.
+
+    Every mode wants the same three lines: build the mm-space geometry, open a
+    window, and carry on headless if that fails (no display, no pygame, a remote
+    shell). Put here rather than in a mode module so no mode has to import
+    another mode to draw.
+    """
+    try:
+        return Renderer(geometry.MazeGeometry(real_maze))
+    except Exception as exc:
+        print("Renderer init failed ({}: {}); continuing without rendering.".format(
+            type(exc).__name__, exc))
+        return None
+
 
 ### Renderer Class
 
@@ -14,9 +31,10 @@ class Renderer:
         pygame.init()
         self.maze = maze
         self.maze_height_mm = self.maze.structure.rows * config.MM_PER_CELL
-        self.scale = int(config.PX_PER_MM*config.MM_PER_CELL)
-        self.screen = pygame.display.set_mode((maze.structure.cols*self.scale+20, maze.structure.rows*self.scale+20))
-        self.offset = 10
+        self.scale = int(config.TILE_PX)
+        self.screen = pygame.display.set_mode((maze.structure.cols * self.scale + 2 * self.offset,
+             maze.structure.rows * self.scale + 2 * self.offset))
+        self.offset = config.RENDER_MARGIN_PX
         self.clock = pygame.time.Clock()        # display throttle
         pygame.display.set_caption("Micro-Mouse")
 
@@ -26,21 +44,27 @@ class Renderer:
                 self.close()
                 raise SystemExit
 
-        self.screen.fill((0,0,0)) # Will repalce with config nums later ie config.BLACK
+        self.screen.fill(config.RENDER_BACKGROUND)
 
         for post in self.maze.posts.values(): # Unconditionally draw in all posts
             rect = self._rect_from_corners(post)
-            pygame.draw.rect(self.screen, (255,255,255), rect)
+            pygame.draw.rect(self.screen, config.RENDER_WALL_KNOWN, rect)
 
         for wall, corners in self.maze.h_walls.items():
             rect = self._rect_from_corners(corners)
             known = self.belief_state("H", wall, belief)
-            pygame.draw.rect(self.screen, (255,255,255) if known else (80,80,80), rect)
+            pygame.draw.rect(
+                self.screen,
+                config.RENDER_WALL_KNOWN if known else config.RENDER_WALL_UNKNOWN,
+                rect)
 
         for wall, corners in self.maze.v_walls.items():
             rect = self._rect_from_corners(corners)
             known = self.belief_state("V", wall, belief)
-            pygame.draw.rect(self.screen, (255,255,255) if known else (80,80,80), rect)
+            pygame.draw.rect(
+                self.screen,
+                config.RENDER_WALL_KNOWN if known else config.RENDER_WALL_UNKNOWN,
+                rect)
 
 
         if done:
@@ -54,9 +78,9 @@ class Renderer:
                 tr = ((x + 1) * cell_pitch, (y + 1) * cell_pitch)
                 tl = (x * cell_pitch + post_size, (y + 1) * cell_pitch)
                 rect = self._rect_from_corners((bl, br, tr, tl))
-                pygame.draw.rect(self.screen, (0, 180, 160), rect) # Vibrant teal for done tiles
+                pygame.draw.rect(self.screen, config.RENDER_TILE_DONE, rect)
             if animate:
-                time.sleep(0.025) # nice animation
+                time.sleep(config.RENDER_DONE_STEP_DELAY_S)
                 pygame.display.flip()
 
         if path:
@@ -70,16 +94,16 @@ class Renderer:
                 tr = ((x + 1) * cell_pitch, (y + 1) * cell_pitch)
                 tl = (x * cell_pitch + post_size, (y + 1) * cell_pitch)
                 rect = self._rect_from_corners((bl, br, tr, tl))
-                pygame.draw.rect(self.screen, (0, 90, 80), rect) # Faded teal for path tiles
+                pygame.draw.rect(self.screen, config.RENDER_TILE_PATH, rect)
                 if animate:
-                    time.sleep(0.05) # nice animation
+                    time.sleep(config.RENDER_PATH_STEP_DELAY_S)
                     pygame.display.flip()
         
         if mouse is not None:
             self._draw_mouse(mouse)
 
         pygame.display.flip()
-        self.clock.tick(60) # also replace with config num
+        self.clock.tick(config.RENDER_FPS)
 
     """Echo the sim's continuous pose as a rotated chassis rectangle. Pure observer: samples
     MouseState (x_mm, y_mm, heading_radians) and the config chassis constants; body frame is
@@ -98,10 +122,13 @@ class Renderer:
         points_px = [self._px(mouse.x_mm + fwd * cos_h - lat * sin_h,
                               mouse.y_mm + fwd * sin_h + lat * cos_h)
                      for fwd, lat in corners_body]
-        pygame.draw.polygon(self.screen, (220, 60, 60), points_px, 2)
+        pygame.draw.polygon(self.screen, config.RENDER_MOUSE_BODY, points_px,
+                            config.RENDER_MOUSE_OUTLINE_PX)
         nose = self._px(mouse.x_mm + config.WHEEL_AXIS_TO_FRONT_MM * cos_h,
                         mouse.y_mm + config.WHEEL_AXIS_TO_FRONT_MM * sin_h)
-        pygame.draw.line(self.screen, (255, 200, 0), self._px(mouse.x_mm, mouse.y_mm), nose, 2)
+        pygame.draw.line(self.screen, config.RENDER_MOUSE_NOSE,
+                         self._px(mouse.x_mm, mouse.y_mm), nose,
+                         config.RENDER_MOUSE_OUTLINE_PX)
 
     """World mm -> screen px, flipping the y-axis (maze 0,0 bottom-left; pygame 0,0 top-left)."""
     def _px(self, x_mm, y_mm):

@@ -12,9 +12,6 @@ class MazeStructure:
     def __str__(self):
         return to_ascii(self)
 
-    def copy(self):
-        return MazeStructure(cells=dict(self.cells), cols=self.cols, rows=self.rows)
-
     def generate_empty_maze(self, cols, rows):
         cells = {}
         for y in range(rows):
@@ -75,17 +72,6 @@ def file_exists(path_str):
         return True
     except OSError:
         return False
-
-
-def available_mazes(directory_path):
-    """List all .num maze files in a directory."""
-    if not file_exists(directory_path):
-        return []
-    file_list = []
-    for filename in sorted(os.listdir(directory_path)):
-        if filename.endswith(".num"):
-            file_list.append(directory_path.rstrip("/") + "/" + filename)
-    return file_list
 
 
 def to_ascii(maze, path=None, mouse_pos=None):
