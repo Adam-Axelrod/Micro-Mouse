@@ -30,8 +30,8 @@ ROUTES_DIR = _package_path("routes")
 
 # Follow-route mode (mode 6). Driving a CLOSED route N times is the maze-relevant
 # stress test: every lap should return the robot to where it started, so the
-# offset after N laps is the accumulated open-loop error. Unlike mode 5's
-# corridor sprint, the turns accumulate too.
+# offset after N laps is the accumulated open-loop error, turns included. Mode 5
+# is this mode run long and logged -- see SOAK_LAPS below.
 FOLLOW_ROUTE_LAPS = 1                  # laps per run; > 1 to accumulate drift
 INTER_LAP_SETTLE_S = 1.0               # brake held between laps (s)
 
@@ -65,16 +65,27 @@ MAX_SPEED_TABLE_ROW_MS = 100            # one printed table row per this much ti
 MAX_SPEED_TABLE_MIN_ROWS = 20           # print every sample rather than fall below this (rows)
 # --- end mode 4 encoder sampling ----------------------------------------------
 
-# Stress test (mode 5). Drives the sprint out and back N times to amplify small
-# per-move errors, then reports where the encoders think it ended up. Run at a
-# lower power than mode 4: the direction reversal is the harshest thing the
-# gearbox sees, and a gentler leg keeps the jolt out of the measurement.
-STRESS_LOG_PATH = _package_path("stress_test.csv")
-STRESS_TEST_LAPS = 20                  # one lap = out and back
-STRESS_TEST_DISTANCE_MM = 5000.0       # one leg
-STRESS_TEST_POWER = 0.45               # fraction of full duty
-STRESS_TEST_SETTLE_S = 1.0             # brake held between legs, before reversing (s)
-STRESS_TEST_ABORT_POLL_S = 0.05        # button poll while settling between legs (s)
+# Lap soak (mode 5). Drives the hand-drawn route in SAVED_ROUTE many times over,
+# and logs one row per lap. It replaces the out-and-back corridor sprint, which
+# reversed along its own arc and so cancelled every symmetric error: a lap of the
+# real maze accumulates distance AND turn error the way a speed run does.
+# The robot is placed at the CENTRE of the route's start cell, not back against a
+# wall, so no half-cell offset is applied to the first move.
+SOAK_LOG_PATH = _package_path("lap_soak.csv")
+SOAK_LAPS = 30                         # laps per run
+# Slower than CRUISE_DUTY_POWER on purpose: the first question a soak answers is
+# whether the robot holds a line at all, not how fast it can. Do not go far below
+# this -- the motor deadband is unmeasured, and under it the wheels do not start.
+SOAK_DRIVE_POWER = 0.40                # fraction of full duty on a straight
+# Turns are NOT slowed with it. A pivot scrubs both tyres sideways, so it needs
+# more duty to break away than a straight does, and an unmeasured deadband is a
+# worse risk than a slightly brisk turn. Hold it equal to TURN_DUTY_POWER below.
+SOAK_TURN_POWER = 0.40                 # fraction of full duty in a pivot
+SOAK_ABORT_POLL_S = 0.05               # button poll while settling between laps (s)
+SOAK_SENSOR_SAMPLES = 8                # ADC reads averaged into one sensor value (count)
+SOAK_EMITTER_SETTLE_S = 0.002          # emitter on/off settle before a read (s)
+SOAK_TICK_DROPOUT_FRACTION = 0.5       # of the median lap; below this is a dropout (fraction)
+SOAK_SLOWDOWN_WARN_PERCENT = -5.0      # first-to-last tick change that means battery sag (%)
 
 # Compass & grid conventions (North, East, South, West)
 DIRECTIONS = ("n", "e", "s", "w")

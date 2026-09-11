@@ -136,18 +136,32 @@ def run_motion_for(duration_seconds, render_object=None, belief=None, route=None
         setup.sim.step_sim_physics(remainder)
 
 
-def pivot_in_place(quarter_turns, clockwise=True, render_object=None, belief=None, route=None):
+def pivot_seconds(quarter_turns, power=None):
+    """How long a pivot of `quarter_turns` takes at `power`. The one place it is timed."""
+    if power is None:
+        power = TURN_DUTY_POWER
+    pivot_rate_rads = 2.0 * power * config.MAX_WHEEL_SPEED_MMS / config.TRACK_WIDTH_MM
+    return (math.pi / 2.0) * quarter_turns / pivot_rate_rads
+
+
+def pivot_in_place(quarter_turns, clockwise=True, render_object=None, belief=None,
+                   route=None, power=None):
     """Spin on the spot through `quarter_turns` x 90 degrees.
 
-    The power is FIXED at TURN_DUTY_POWER and only the duration scales with the
+    The power is FIXED for a given turn and only the duration scales with the
     angle. Scaling both is what made a U-turn rotate 360 degrees: it drove at
     2 x TURN_DUTY_POWER, so it spun twice as fast for the time a 180 needed at
     the base rate. Corrected 2026-08-31.
+
+    `power` lets a mode turn more gently than TURN_DUTY_POWER. The duration is
+    derived from whatever power is used, never from a different one, which is the
+    same trap in another guise.
     """
-    pivot_rate_rads = 2.0 * TURN_DUTY_POWER * config.MAX_WHEEL_SPEED_MMS / config.TRACK_WIDTH_MM
-    pivot_time_seconds = (math.pi / 2.0) * quarter_turns / pivot_rate_rads
+    if power is None:
+        power = TURN_DUTY_POWER
+    pivot_time_seconds = pivot_seconds(quarter_turns, power)
 
     sign = 1.0 if clockwise else -1.0
-    drive_motors(sign * TURN_DUTY_POWER, -sign * TURN_DUTY_POWER)
+    drive_motors(sign * power, -sign * power)
     run_motion_for(pivot_time_seconds, render_object, belief, route)
     stop_motors()

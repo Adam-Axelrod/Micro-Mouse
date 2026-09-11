@@ -31,11 +31,12 @@ or `geometry` must never go on the board:
 ```
 main.py setup.py config.py drive.py maze.py explorer.py exploration.py
 speed_run.py search_algorithms.py commands.py motor_log.py max_speed_test.py
-diagnostic_encoders.py  +  belief.num
+lap_log.py clock.py diagnostic_encoders.py  +  belief.num  +  route.mmc
 ```
 
 `diagnostic_encoders.py` is now part of the base set: `setup.py` loads it on
-first encoder read. Add for hardware work: `bench_test.py` — `main.py` imports
+first encoder read. `route.mmc` is what modes 5 and 6 drive, so copy the route
+you mean to run: the board has no editor. Add for hardware work: `bench_test.py` — `main.py` imports
 it lazily, so the set above boots without it.
 
 `drive.py` is the motor boundary: every mode drives through it. The whole `sim/`
@@ -45,7 +46,7 @@ With `mpremote` (the VS Code MicroPico extension does the same thing via its
 "Upload project" command):
 
 ```bash
-mpremote cp main.py setup.py config.py drive.py maze.py explorer.py exploration.py speed_run.py search_algorithms.py commands.py motor_log.py max_speed_test.py diagnostic_encoders.py belief.num :
+mpremote cp main.py setup.py config.py drive.py maze.py explorer.py exploration.py speed_run.py search_algorithms.py commands.py motor_log.py max_speed_test.py lap_log.py clock.py diagnostic_encoders.py belief.num route.mmc :
 ```
 
 ```bash
@@ -140,7 +141,7 @@ SW2 will start.
 | 2 | 2 | Speed run — loads `belief.num`, flood-fills, drives it |
 | 3 | 3 | Bench test — the BT-0..BT-8 bring-up checks |
 | 4 | 4 | Max speed test — one 5.2 m dash at full duty (§5.1) |
-| 5 | 5 | Stress test — N laps of the sprint, then drift (§5.2) |
+| 5 | 5 | Lap soak — 30 logged laps of `route.mmc`, then drift (§5.2) |
 | 6 | 6 | Follow route — drive `route.mmc` verbatim, N laps (§5.3) |
 
 Boot lands on mode 1 and blinks once. Each SW1 press steps to the next mode and
@@ -155,7 +156,7 @@ back to mode 1.
 Every Pico run traces commanded motor powers to `motor_log.csv` automatically:
 `main.py` opens the trace before dispatching a mode and closes it after. Starting
 a mode straight from the REPL bypasses `main`, so `max_speed_test.run()` and
-`.stress()` open the trace themselves. Anything else run by hand needs
+`speed_run.soak()` open the trace themselves. Anything else run by hand needs
 `import drive; drive.start_trace(force=True)` first.
 
 On the PC:
@@ -166,7 +167,9 @@ python3 main.py --render   # with pygame
 python3 main.py --step     # mode 1, exploration
 python3 main.py --bench    # mode 3, bench test (Pico only)
 python3 main.py --maxspeed # mode 4, max speed test
-python3 main.py --stress   # mode 5, stress test
+python3 main.py --soak      # mode 5, 30 logged laps of route.mmc
+python3 main.py --soak --laps=5 --power=0.3   # shorter and slower
+python3 main.py --follow    # mode 6, one lap of route.mmc
 python3 main.py --log      # also write a motor trace (automatic on hardware)
 ```
 
@@ -297,65 +300,84 @@ A file with no header is driven from cell (0, 0) facing north, and mode 6 says s
 rather than guessing silently. Redraw it to record a pose.
 
 Laps are the maze-relevant drift test. Every lap should return the robot to its
-start pose, so the offset after N laps is the accumulated open-loop error, and
-unlike §5.2 the turn error accumulates instead of cancelling.
+start pose, so the offset after N laps is the accumulated open-loop error, turn
+error included. §5.2 is the same drive, run long and logged.
 
 ```python
 import speed_run; speed_run.follow(laps=10)
 ```
 
-The route must end on the heading it started on or lap 2 sets off sideways. A
-drawn route never does: `path_to_commands` derives turns from cell transitions,
-so it always ends on a drive. Append the closing turn by hand — see
-`routes/lap3x3.mmc`. Both the editor and mode 6 warn when it is missing.
+A route driven in laps must return to its start **cell AND heading**. A drawn
+route does neither by default: `path_to_commands` derives turns from cell
+transitions, so it always ends on a drive, and the last cell is wherever you
+stopped clicking. Mode 6 refuses more than one lap of a route that does not close,
+and says where it ends instead. Append the closing moves by hand — see
+`routes/lap3x3.mmc` (the bare perimeter) and `routes/lap3x3_via_centre.mmc` (the
+perimeter plus the centre cell, all nine cells of a 3x3).
 
-### 5.2 Stress test (mode 5)
+### 5.2 Lap soak (mode 5)
 
-Twenty laps of the sprint, out and back, at a gentler duty. Forty legs turn a
-small per-move bias into something a tape measure can see, and twenty minutes of
-vibration is a far harder test of this board's intermittent encoders than any
-bench check.
+Thirty laps of the route in `route.mmc`, logged lap by lap. A 3x3 perimeter lap is
+about 0.72 m of driving, so thirty laps is ~22 m and turns a per-move bias too
+small to see into an offset the tape reads off the floor. Unlike the sprint it
+replaced, a lap cannot cancel its own error: the turns accumulate too.
 
-Defaults: 20 laps × 5000 mm at power 0.45. That is 200 m of travel and about
-**11 minutes 30 seconds**. Press either button between legs to abort.
+Defaults: 30 laps at drive power 0.40, turns at 0.40. Slower than a speed run on
+purpose — the first question is whether the robot holds a line at all. Press
+either button between laps to abort.
 
-Before starting, mark the start pose properly: both wheel contact points AND a
-heading line. Without the heading mark half the result is unreadable.
+**Before starting:**
+
+1. Copy the route you mean to drive into `route.mmc`, or draw one (§5.3).
+2. Place the robot at the **CENTRE** of the start cell the route names, not back
+   against a wall. A half-cell offset at the start is a half-cell error for the
+   whole run.
+3. Mark the start pose: both wheel contact points **and** a heading line. Without
+   the heading mark half the result is unreadable.
 
 ```python
-import max_speed_test
-max_speed_test.stress()                       # the default 20 laps
-max_speed_test.stress(laps=5)                 # a shorter first go
-max_speed_test.stress(turn_around=True)       # pivot instead of reversing
+import speed_run
+speed_run.soak()                  # the default 30 laps of route.mmc
+speed_run.soak(laps=5)            # a shorter first go
+speed_run.soak(power=0.30)        # slower still
+speed_run.soak(route_path="routes/lap3x3_via_centre.mmc")
 ```
 
-**What reversing cannot see.** Backing up along the same wheel-speed ratio
-retraces the arc exactly, so any error identical in both directions cancels. A
-7% distance-calibration error overshoots equally out and back and lands the
-robot on the start line anyway. This mode measures **asymmetry and randomness,
-not calibration**. `turn_around=True` pivots 180° instead, so every leg is a
-forward drive plus a turn, which is what a speed run is made of, and distance
-and turn errors accumulate. That is the harsher and more maze-relevant test.
+**It refuses a route that does not close.** Thirty laps of a route ending two
+cells from its start drives into a wall on lap 2, so mode 5 walks the verbs on the
+grid first and will not arm the motors. It prints the cell and heading the route
+really ends on. The saved editor route is the common case: four right turns close
+the HEADING while the last cell is somewhere else entirely.
 
 What to look for in the report:
 
 | Reading | What it means |
 |---|---|
-| Net displacement well off 0 | forward and reverse are not symmetric |
-| Net heading vs the floor mark | agreement means a real drive bias; disagreement means the ticks are lying |
-| Ticks per leg falling over the run | battery sag or a hot motor. Legs are a fixed DURATION, so fewer ticks is less distance, and a late-battery speed run undershoots |
-| `ENCODER DROPOUT` on a leg | the intermittent channel. This is the fault a soak run exists to catch |
-| Lateral offset from the line | the one thing only the tape can tell you |
+| Heading residual the same sign every lap | a mistimed turn, not noise. Fix `TRACK_WIDTH_MM` or the turn power before anything else |
+| Ticks per lap falling over the run | battery sag or a hot motor. Laps are a fixed DURATION, so fewer ticks is less distance |
+| `ENCODER DROPOUT` on a lap | the intermittent channel. This is the fault a soak run exists to catch |
+| Offset from the start mark | the one thing only the tape can tell you |
 
-Every leg appends a row to `stress_test.csv`
-(`leg,direction,commanded_s,left_ticks,right_ticks,cum_left,cum_right,veer_deg`),
-so the per-leg trend survives even if the run is aborted.
+Every lap appends a row to `lap_soak.csv`:
+
+```
+lap,elapsed_s,left_ticks,right_ticks,d_left,d_right,turn_residual_deg,
+left_lit,left_unlit,front_lit,front_unlit,right_lit,right_unlit
+```
+
+The trend survives an abort, because every row is flushed as it is written.
+
+The six light columns are read while braked at the end of each lap, lit minus
+unlit, at the same pose every time. They are there for the wall-distance work
+that has not been done yet: thirty readings of one pose say how repeatable the
+sensors are before anything trusts them to correct a heading. Both halves are
+kept, because lit alone cannot tell a wall from the room lights changing.
 
 ---
 
 ## 6. Getting files off the Pico
 
-The robot writes `motor_log.csv` and `max_speed_test.csv` to its own
+The robot writes `motor_log.csv`, `max_speed_test.csv` and `lap_soak.csv` to its own
 filesystem. On the Pico `config.PACKAGE_DIR` is empty, so everything sits at the
 root and the remote path is just `:name.csv`.
 

@@ -51,7 +51,7 @@ MODES = [
     ("Speed Run", speed_run.run, ()),
     ("Bench Test", run_bench, ()),
     ("Max Speed Test", max_speed_test.run, ()),
-    ("Stress Test", max_speed_test.stress, ("laps",)),
+    ("Lap Soak", speed_run.soak, ("laps", "route_path", "map_path", "power")),
     ("Follow Route", speed_run.follow, ("route_path", "map_path", "laps")),
 ]
 
@@ -62,7 +62,7 @@ CLI_MODE_FLAGS = {
     "--speed": 1,
     "--bench": 2,
     "--maxspeed": 3,
-    "--stress": 4,
+    "--soak": 4,
     "--follow": 5,
 }
 
@@ -72,6 +72,7 @@ CLI_OPTIONS = {
     "--route": ("route_path", str),
     "--map": ("map_path", str),
     "--laps": ("laps", int),
+    "--power": ("power", float),
 }
 
 

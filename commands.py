@@ -67,6 +67,59 @@ def closes_the_loop(movement_commands):
     return net_quarter_turns(movement_commands) % 4 == 0
 
 
+# Clockwise quarter turns from each heading, so a verb list can be walked on the
+# grid without a maze, a planner or a motor.
+_RIGHT_OF = {"n": "e", "e": "s", "s": "w", "w": "n"}
+
+
+def turn_heading(heading, quarter_turns):
+    """The heading after `quarter_turns` clockwise quarters from `heading`."""
+    for _ in range(quarter_turns % 4):
+        heading = _RIGHT_OF[heading]
+    return heading
+
+
+def walk_route(movement_commands, start_pose):
+    """Cells a verb list visits, as [(x, y, heading), ...] including the start.
+
+    Pure grid arithmetic: it answers where a route GOES, which `net_quarter_turns`
+    cannot. Laps need both. A route may end on its start heading and still finish
+    two cells away, and driving that thirty times walks off the maze -- the saved
+    perimeter route does exactly this.
+    """
+    x, y, heading = start_pose
+    poses = [(x, y, heading)]
+    for command_string in movement_commands:
+        if not command_string or command_string.startswith("#"):
+            continue
+        parts = command_string.split()
+        verb = parts[0]
+        if verb == FORWARD:
+            dx, dy = config.SIDE_DELTA[heading]
+            for _ in range(int(parts[1])):
+                x += dx
+                y += dy
+                poses.append((x, y, heading))
+        elif verb in QUARTER_TURNS:
+            heading = turn_heading(heading, QUARTER_TURNS[verb])
+            poses.append((x, y, heading))
+        elif verb == HALT:
+            break
+    return poses
+
+
+def returns_to_start(movement_commands, start_pose):
+    """True if the route ends in its start cell on its start heading."""
+    return walk_route(movement_commands, start_pose)[-1] == tuple(start_pose)
+
+
+def leaves_the_grid(movement_commands, start_pose, grid):
+    """Cells the route visits that do not exist on a `grid` = (cols, rows)."""
+    cols, rows = grid
+    return [(x, y) for x, y, _heading in walk_route(movement_commands, start_pose)
+            if not (0 <= x < cols and 0 <= y < rows)]
+
+
 # Route file header. The verbs are egocentric, so the same verb list drives a
 # different shape from a different start pose, and a grid that is not 16x16 has
 # no centre convention to fall back on. The header carries the pose the route was

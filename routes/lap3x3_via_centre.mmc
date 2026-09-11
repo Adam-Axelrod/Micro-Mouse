@@ -1,0 +1,20 @@
+# micromouse route v1
+# maze: blank3x3.num
+# grid: 3x3
+# start: 0 0 n
+# goal: 0 0
+F 2
+R
+F 2
+R
+F 2
+R
+F 1
+R
+F 1
+L
+F 1
+L
+F 1
+U
+H

@@ -22,7 +22,8 @@ import config
 DEPLOYMENT_SET = (
     "main.py", "setup.py", "config.py", "drive.py", "maze.py", "explorer.py",
     "exploration.py", "speed_run.py", "search_algorithms.py", "commands.py",
-    "motor_log.py", "max_speed_test.py", "diagnostic_encoders.py",
+    "motor_log.py", "max_speed_test.py", "lap_log.py", "clock.py",
+    "diagnostic_encoders.py",
 )
 
 # Imported lazily, so it may sit outside the deployment set without breaking boot.
@@ -179,9 +180,18 @@ def test_working_files_are_not_tracked():
     """belief.num and route.mmc are run artefacts, not fixtures."""
     tracked = subprocess.run(["git", "ls-files"], cwd=PACKAGE_DIR,
                              capture_output=True, text=True).stdout.split("\n")
-    for artefact in ("belief.num", "route.mmc", "motor_log.csv"):
+    for artefact in ("belief.num", "route.mmc", "motor_log.csv", "lap_soak.csv"):
         assert artefact not in tracked, artefact
     print("✓ test_working_files_are_not_tracked passed")
+
+
+def test_the_cheatsheet_names_every_deployed_file():
+    """The operator copies the list in CHEATSHEET.md section 2, not DEPLOYMENT_SET."""
+    with open(os.path.join(PACKAGE_DIR, "CHEATSHEET.md")) as handle:
+        text = handle.read()
+    missing = [name for name in DEPLOYMENT_SET if name not in text]
+    assert not missing, missing
+    print("✓ test_the_cheatsheet_names_every_deployed_file passed")
 
 
 TESTS = (
@@ -195,6 +205,7 @@ TESTS = (
     test_documented_paths_point_somewhere_real,
     test_committed_fixtures_parse,
     test_working_files_are_not_tracked,
+    test_the_cheatsheet_names_every_deployed_file,
 )
 
 

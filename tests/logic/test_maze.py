@@ -118,8 +118,15 @@ def test_file_exists_is_os_path_free():
 
 def test_shipped_maze_files_parse():
     """groundtruth.num is the sim's answer key and belief.num is what a speed run
-    drives. A malformed one is a silent wrong-maze run, not a crash."""
-    for path in (config.DEFAULT_MAZE, config.SAVED_BELIEF_MAZE):
+    drives. A malformed one is a silent wrong-maze run, not a crash.
+
+    belief.num is a RUN ARTEFACT and is gitignored, so it is checked only when it
+    exists. Requiring it failed on any clean clone, which is every CI run.
+    """
+    paths = [config.DEFAULT_MAZE]
+    if file_exists(config.SAVED_BELIEF_MAZE):
+        paths.append(config.SAVED_BELIEF_MAZE)
+    for path in paths:
         assert file_exists(path), path
         cells, cols, rows = num_file_import(path)
         assert cols > 0 and rows > 0

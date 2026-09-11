@@ -122,8 +122,24 @@ def test_blink_led_returns_the_led_to_off():
     print("✓ test_blink_led_returns_the_led_to_off passed")
 
 
+def test_a_pivot_scales_its_duration_with_the_angle_and_not_its_power():
+    """The U-turn bug: scaling power AND duration together spun a 180 through 360."""
+    quarter = drive.pivot_seconds(1)
+    assert abs(drive.pivot_seconds(2) - 2.0 * quarter) < 1e-9
+    assert abs(drive.pivot_seconds(1, config.TURN_DUTY_POWER) - quarter) < 1e-9
+    print("✓ test_a_pivot_scales_its_duration_with_the_angle_and_not_its_power passed")
+
+
+def test_a_gentler_pivot_is_timed_longer():
+    """A mode may turn slowly, but only if the clock knows it."""
+    assert drive.pivot_seconds(1, 0.20) > drive.pivot_seconds(1, 0.40)
+    print("✓ test_a_gentler_pivot_is_timed_longer passed")
+
+
 TESTS = [
     test_the_boundary_symbols_exist_and_are_callable,
+    test_a_pivot_scales_its_duration_with_the_angle_and_not_its_power,
+    test_a_gentler_pivot_is_timed_longer,
     test_forward_power_drives_the_forward_channel_and_parks_reverse,
     test_negative_power_drives_the_reverse_channel,
     test_the_two_wheels_are_driven_independently,

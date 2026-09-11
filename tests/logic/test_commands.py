@@ -178,7 +178,60 @@ def test_write_command_file_records_the_start_and_the_goal():
     print("✓ test_write_command_file_records_the_start_and_the_goal passed")
 
 
+def test_walk_route_reports_every_cell_in_order():
+    verbs = ["F 2", "R", "F 1", "H"]
+    poses = commands.walk_route(verbs, (0, 0, "n"))
+    assert poses[0] == (0, 0, "n"), poses
+    assert [p[:2] for p in poses] == [(0, 0), (0, 1), (0, 2), (0, 2), (1, 2)], poses
+    assert poses[-1] == (1, 2, "e"), poses[-1]
+    print("✓ test_walk_route_reports_every_cell_in_order passed")
+
+
+def test_walk_route_stops_at_halt():
+    poses = commands.walk_route(["F 1", "H", "F 9"], (0, 0, "n"))
+    assert poses[-1] == (0, 1, "n"), poses
+    print("✓ test_walk_route_stops_at_halt passed")
+
+
+def test_a_route_can_close_in_heading_and_not_in_position():
+    """The saved perimeter route did exactly this, and 30 laps of it drives off."""
+    verbs = ["F 2", "R", "F 2", "R", "F 2", "R", "F 1", "R", "F 1", "H"]
+    assert commands.closes_the_loop(verbs), "four right turns is a closed heading"
+    assert not commands.returns_to_start(verbs, (0, 0, "n")), "but it ends at (1, 1)"
+    print("✓ test_a_route_can_close_in_heading_and_not_in_position passed")
+
+
+def test_the_committed_lap_fixtures_close_and_stay_on_their_grid():
+    for name in ("lap3x3.mmc", "lap3x3_via_centre.mmc"):
+        path = config.ROUTES_DIR + "/" + name
+        verbs = commands.read_command_file(path)
+        header = commands.read_route_header(path)
+        start = header["start"]
+        assert commands.returns_to_start(verbs, start), name
+        assert not commands.leaves_the_grid(verbs, start, header["grid"]), name
+    print("✓ test_the_committed_lap_fixtures_close_and_stay_on_their_grid passed")
+
+
+def test_leaves_the_grid_names_the_first_cell_that_does_not_exist():
+    outside = commands.leaves_the_grid(["F 4", "H"], (0, 0, "n"), (3, 3))
+    assert outside == [(0, 3), (0, 4)], outside
+    print("✓ test_leaves_the_grid_names_the_first_cell_that_does_not_exist passed")
+
+
+def test_turn_heading_wraps_the_compass():
+    assert commands.turn_heading("n", 4) == "n"
+    assert commands.turn_heading("n", 1) == "e"
+    assert commands.turn_heading("n", -1) == "w"
+    print("✓ test_turn_heading_wraps_the_compass passed")
+
+
 TESTS = [
+    test_walk_route_reports_every_cell_in_order,
+    test_walk_route_stops_at_halt,
+    test_a_route_can_close_in_heading_and_not_in_position,
+    test_the_committed_lap_fixtures_close_and_stay_on_their_grid,
+    test_leaves_the_grid_names_the_first_cell_that_does_not_exist,
+    test_turn_heading_wraps_the_compass,
     test_turn_between_picks_the_shortest_pivot,
     test_turn_between_rejects_a_turn_that_is_not_needed,
     test_path_to_commands_runs_straight_cells_together,
