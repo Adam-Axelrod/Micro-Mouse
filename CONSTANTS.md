@@ -65,7 +65,14 @@ these without recomputing the product.
 | `MM_PER_CELL` | 180 | FIXED | Classic spec, wall centre to wall centre. The key sim anchor. |
 | `POST_SIDE_MM` | 12 | FIXED | Classic spec wall thickness. |
 | `WALL_WIDTH_MM` | 12 | DERIVED | `= POST_SIDE_MM`. |
-| `WALL_LENGTH_MM` | 168 | DERIVED | `MM_PER_CELL - POST_SIDE_MM`, written as a literal. No reader in the codebase. The PRINTED wall is a different number: 173.5 mm as of `Logs/2026-09-11_wall-length-plus-1mm.md`. Do not reconcile these two by editing this one. |
+| `WALL_LENGTH_MM` | 168 | DERIVED | `MM_PER_CELL - POST_SIDE_MM`, written as a literal. The GAP between two posts. No reader in the codebase. |
+
+The printed wall part is 172.5 mm, and that is not a disagreement with the 168
+above: the part includes the tabs that seat into the posts at each end. A
+`classic-maze-wall-plus-1mm.stl` exists in `Maze Construction/` and takes the
+part to 173.5 mm. That change was a FIT tolerance, not a geometry change, and it
+has never been printed. The maze is built from the original walls. Nothing about
+either number reaches a run.
 
 ## Drive powers
 
@@ -222,8 +229,5 @@ it does not write them. When you promote one:
 
 ## Known contradictions, found while writing this
 
-- `WALL_LENGTH_MM` is 168 here and the printed wall is 173.5 mm. Both are
-  correct about different things: 168 is the classic-spec gap between posts,
-  173.5 is the part that was sliced. Nothing reads either.
 - `BODY_LENGTH_MM`, `WALL_LENGTH_MM` and `WALL_WIDTH_MM` have no reader in the
   codebase at all. They are documentation that happens to be executable.

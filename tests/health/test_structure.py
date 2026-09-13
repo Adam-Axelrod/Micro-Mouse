@@ -51,11 +51,7 @@ PICO_ONLY_MODULES = ("diagnostic_encoders",)
 
 
 def _local_modules():
-    """Every first-party module, as a path relative to PACKAGE_DIR.
-
-    Paths rather than names, because "maze.py" stopped being unique the moment
-    modules moved into packages.
-    """
+    """Every first-party module, as a path relative to PACKAGE_DIR."""
     paths = [f for f in os.listdir(PACKAGE_DIR)
              if f.endswith(".py") and not f.startswith("_")]
     for package in LOCAL_PACKAGES:
@@ -80,11 +76,8 @@ def _tree(path):
 def _import_bindings(path):
     """{local name: dotted target} for every import at module scope.
 
-    `from brain import maze` binds the NAME `maze` to the MODULE `brain.maze`.
-    Once modules live in packages the two stop being the same string, and a later
-    `maze.num_file_import` resolves against the name, so both have to be kept.
-    Imports inside functions are ignored; imports inside try/except are not,
-    because that is how the sim and the board are told apart.
+    `from brain import maze` binds the name `maze` to the module `brain.maze`, so
+    name and module have to be tracked apart. try/except imports count.
     """
     bindings = {}
 
@@ -163,12 +156,9 @@ def test_cross_module_calls_resolve():
 
 
 def test_the_layers_hold():
-    """A directory that encodes no rule is just a folder.
+    """AGENTS.md invariant 2, as a test instead of a review.
 
-    brain/ exists so that AGENTS.md invariant 2 fails a test instead of a review.
-    A brain module may reach `config` and other brain modules. Not `setup`, not
-    `drive`, not `sim`, not `machine`. Add a package to LAYERS when it is created,
-    or the directory means nothing.
+    Add a package to LAYERS when you create one, or the directory means nothing.
     """
     failures = []
     for path in _local_modules():
@@ -186,13 +176,10 @@ def test_the_layers_hold():
 
 
 def test_every_package_ships_its_init():
-    """CPython cannot catch this one, so it is checked statically.
+    """Static, because no runtime check on the PC can catch it.
 
-    PEP 420 namespace packages mean `brain/` imports perfectly well on the PC
-    with no __init__.py at all, so test_the_minimal_deployment_boots would stay
-    green on a tree that cannot boot. MicroPython has no namespace packages: the
-    board fails with a terse ImportError, which is the usual tell for an
-    on-device fault and a miserable thing to diagnose at the bench.
+    PEP 420 means `brain/` imports fine here without one. MicroPython has no
+    namespace packages, so the same tree fails at boot on the board.
     """
     for package in LOCAL_PACKAGES:
         init = package + "/__init__.py"
@@ -280,11 +267,9 @@ def test_working_files_are_not_tracked():
 
 
 def test_constants_md_names_every_constant():
-    """CONSTANTS.md says where each number came from. config.py only says what.
+    """config.py says what a number is; CONSTANTS.md says how far to trust it.
 
-    A constant with no provenance is how a PROVISIONAL number gets treated as a
-    MEASURED one. This fails when config.py gains a constant and the document
-    does not, which is the only moment anybody knows the answer.
+    Fails when config.py gains a constant the document does not name.
     """
     with open(os.path.join(PACKAGE_DIR, "config.py")) as handle:
         source = handle.read()

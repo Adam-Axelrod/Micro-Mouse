@@ -74,11 +74,10 @@ print("OK")
 
 
 def _build_deployment(directory):
-    """Copy the deployment set into `directory`, TREE AND ALL.
+    """Copy the deployment set into `directory`, tree and all.
 
-    The set holds paths, not bare filenames. Flattening brain/maze.py to
-    maze.py here would boot a layout the board will never have, and the
-    ImportError would arrive on the bench instead of in this test.
+    The set holds paths. Flattening brain/maze.py would boot a layout the board
+    will never have.
     """
     for filename in DEPLOYMENT_SET:
         target = os.path.join(directory, filename)

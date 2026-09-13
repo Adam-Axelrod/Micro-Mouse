@@ -37,11 +37,8 @@ class MotorLog:
 
     def __init__(self, path_str, power_epsilon=None, clock_ms=None):
         self.path_str = path_str
-        # Where "now" comes from. Defaults to the project clock, which already
-        # knows which one this target runs on: the wall clock on the Pico, where
-        # the drive routines really do sleep, and the SIM clock on the PC, where
-        # they step physics instead and wall time barely moves. A caller may
-        # still inject its own -- that is how a test drives a fake clock.
+        # Defaults to the project clock, which knows the target: wall time on the
+        # Pico, sim time on the PC. Injectable so a test can drive a fake clock.
         self.clock_ms = clock_ms if clock_ms is not None else clock.now_ms
         # Powers closer together than this count as unchanged. Guards against a
         # float round-trip emitting a record that says nothing.

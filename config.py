@@ -14,24 +14,16 @@ def _package_path(filename):
     return PACKAGE_DIR + "/" + filename if PACKAGE_DIR else filename
 
 
-# Maps and routes. Two working files sit at the package root and are what the
-# robot actually reads; both are run artefacts, and both are copied in from a
-# committed fixture directory.
-#
-#   committed fixture        working file      read by
-#   mazes/*.num              belief.num        mode 2, which plans over it
-#   routes/*.mmc             route.mmc         mode 6, which follows it verbatim
-#
+# Maps and routes. belief.num and route.mmc are run artefacts copied in from the
+# committed fixtures in mazes/ and routes/. Provenance: CONSTANTS.md.
 DEFAULT_MAZE = _package_path("groundtruth.num")
 SAVED_BELIEF_MAZE = _package_path("belief.num")
 SAVED_ROUTE = _package_path("route.mmc")
 MAZES_DIR = _package_path("mazes")
 ROUTES_DIR = _package_path("routes")
 
-# Follow-route mode (mode 6). Driving a CLOSED route N times is the maze-relevant
-# stress test: every lap should return the robot to where it started, so the
-# offset after N laps is the accumulated open-loop error, turns included. Mode 5
-# is this mode run long and logged -- see SOAK_LAPS below.
+# Follow-route mode (mode 6). A closed route driven N times: the offset after N
+# laps is the accumulated open-loop error. Mode 5 is this, run long and logged.
 FOLLOW_ROUTE_LAPS = 1                  # laps per run; > 1 to accumulate drift
 INTER_LAP_SETTLE_S = 1.0               # brake held between laps (s)
 
@@ -40,10 +32,8 @@ INTER_LAP_SETTLE_S = 1.0               # brake held between laps (s)
 MOTOR_LOG_PATH = _package_path("motor_log.csv")
 MOTOR_LOG_POWER_EPSILON = 0.001  # commanded powers closer than this are "unchanged"
 
-# Straight-line max speed test (mode 4). Drives one open-loop dash at full duty
-# over a marked distance, and samples the encoders through it, so one run yields
-# both the average speed and the acceleration ramp. It produced the measured
-# MAX_WHEEL_SPEED_MMS below on 2026-08-31. Provenance: CONSTANTS.md.
+# Max speed test (mode 4). One dash at full duty over a marked distance, encoders
+# sampled through it, so one run gives both the average speed and the ramp.
 MAX_SPEED_LOG_PATH = _package_path("max_speed_test.csv")
 MAX_SPEED_TEST_DISTANCE_MM = 5200.0    # 5 m marked run, plus 200 mm of overrun
 MAX_SPEED_TEST_POWER = 1.0             # full duty: the point is the ceiling
@@ -52,11 +42,8 @@ MAX_SPEED_TEST_COUNTDOWN_MS = 700      # on-time of one countdown blink (ms)
 MAX_SPEED_TEST_BRAKE_HOLD_S = 1.5      # hold the brake this long before reporting (s)
 MAX_SPEED_TEST_MAX_DURATION_S = 20.0   # runaway guard on any single dash (s)
 
-# --- Mode 4 encoder sampling: the acceleration ramp ---------------------------
-# MAX_WHEEL_SPEED_MMS below is an AVERAGE FROM REST, because one dash used to
-# yield one number. Polling the encoders DURING the dash turns the same run into
-# a velocity curve, so the ramp duration and the terminal speed come out of a
-# single run instead of a series of dashes at different distances.
+# Mode 4 encoder sampling. Polling during the dash turns one run into a velocity
+# curve, so the ramp and the terminal speed come out together.
 MAX_SPEED_SAMPLE_LOG_PATH = _package_path("max_speed_samples.csv")
 MAX_SPEED_SAMPLE_INTERVAL_MS = 20       # encoder poll period during the dash (ms)
 MAX_SPEED_SAMPLE_LIMIT = 1200           # pre-allocated sample slots (count)
@@ -64,23 +51,15 @@ MAX_SPEED_RAMP_SMOOTH_SAMPLES = 5       # samples averaged into one velocity poi
 MAX_SPEED_RAMP_PLATEAU_FRACTION = 0.98  # of terminal speed = the ramp is over (fraction)
 MAX_SPEED_TABLE_ROW_MS = 100            # one printed table row per this much time (ms)
 MAX_SPEED_TABLE_MIN_ROWS = 20           # print every sample rather than fall below this (rows)
-# --- end mode 4 encoder sampling ----------------------------------------------
 
-# Lap soak (mode 5). Drives the hand-drawn route in SAVED_ROUTE many times over,
-# and logs one row per lap. It replaces the out-and-back corridor sprint, which
-# reversed along its own arc and so cancelled every symmetric error: a lap of the
-# real maze accumulates distance AND turn error the way a speed run does.
-# The robot is placed at the CENTRE of the route's start cell, not back against a
-# wall, so no half-cell offset is applied to the first move.
+# Lap soak (mode 5). The route in SAVED_ROUTE, driven many times, one log row per
+# lap. The robot starts at the CENTRE of the start cell. Background: D-023.
 SOAK_LOG_PATH = _package_path("lap_soak.csv")
 SOAK_LAPS = 30                         # laps per run
-# Slower than CRUISE_DUTY_POWER on purpose: the first question a soak answers is
-# whether the robot holds a line at all, not how fast it can. Do not go far below
-# this -- the motor deadband is unmeasured, and under it the wheels do not start.
+# Below cruise duty on purpose. Do not go far under it: the deadband is unmeasured
+# and beneath it the wheels do not start at all.
 SOAK_DRIVE_POWER = 0.40                # fraction of full duty on a straight
-# Turns are NOT slowed with it. A pivot scrubs both tyres sideways, so it needs
-# more duty to break away than a straight does, and an unmeasured deadband is a
-# worse risk than a slightly brisk turn. Hold it equal to TURN_DUTY_POWER below.
+# Not slowed with the straights: a pivot scrubs and needs more duty to break away.
 SOAK_TURN_POWER = 0.40                 # fraction of full duty in a pivot
 SOAK_ABORT_POLL_S = 0.05               # button poll while settling between laps (s)
 SOAK_SENSOR_SAMPLES = 8                # ADC reads averaged into one sensor value (count)
@@ -105,19 +84,12 @@ POST_SIDE_MM = 12
 WALL_WIDTH_MM = POST_SIDE_MM
 WALL_LENGTH_MM = 168
 
-# Physical mouse dimensions (in mm)
-# Ruler-confirmed 2026-08-31. The EFFECTIVE rolling diameter under the robot's
-# weight is a little smaller (tyre compression), never larger, but on a hard
-# small wheel that gap is tenths of a mm, not millimetres.
+# Physical mouse dimensions (in mm). MEASURED, ruler, 2026-08-31.
 WHEEL_DIAMETER_MM = 32
 WHEEL_CIRCUMFERENCE_MM = math.pi * WHEEL_DIAMETER_MM
-# Ruler, wheel centre to wheel centre, 2026-08-31. This replaces an unmeasured
-# 70 and BT-8's encoder-derived ~66; BT-8 says itself that the ruler is the check
-# on the derivation, not the reverse. Pivot timing divides by this, so a wrong
-# value shows up as every turn being off by the same percentage.
-# Caveat: the kinematic track is between the tyre CONTACT patches, and a pivot
-# scrubs, so the effective value can sit a few percent off the geometric one. A
-# powered 360 x N pivot against a heading line is what would settle that.
+# mm, wheel centre to centre. MEASURED, ruler, 2026-08-31. Pivot timing divides by
+# it. TRAP: a track error and a speed error cancel, so never change one alone.
+# Provenance and the full caveat: CONSTANTS.md.
 TRACK_WIDTH_MM = 75
 
 # Chassis body frame (in mm)
@@ -126,28 +98,15 @@ BODY_WIDTH_MM = 80
 WHEEL_AXIS_TO_BACK_MM = 36
 WHEEL_AXIS_TO_FRONT_MM = BODY_LENGTH_MM - WHEEL_AXIS_TO_BACK_MM
 
-# Encoder calibration. This is a DESIGNED INTEGER, not a measurement: the
-# encoder's edges per motor shaft revolution times the gearbox ratio (28 edges
-# from a 7-pole ring at full quadrature, times 50:1). Hold it fixed. The wheel
-# and track are ruler-confirmed too, so if ticks and tape disagree the error is
-# in the TICKS: the decoder is dropping edges. BT-7 (~1306) and BT-8 (~66) were
-# both that fault, not measurements of the chassis.
+# DESIGNED, not measured: 28 edges per motor shaft rev at full quadrature, times
+# a 50:1 gearbox. Hold it fixed. If ticks and tape disagree, the ticks are wrong.
 ENCODER_COUNTS_PER_WHEEL_REV = 1400
 MM_PER_TICK = WHEEL_CIRCUMFERENCE_MM / ENCODER_COUNTS_PER_WHEEL_REV
 
-# Wheel ground speed at 100% duty. MEASURED 2026-08-31, mode 4: 5904 mm of wheel
-# travel in 8.667 s. Taken from the encoders, not the stopwatch, because the tape
-# confirmed them to 1.6% on that run and they carry no human reaction time.
-#
-# Read it as an AVERAGE FROM REST over ~5.9 m, not as a terminal speed. The same
-# run timed 5000 mm in 7.77 s by hand, i.e. 644 mm/s: a shorter run averaging
-# lower is the acceleration ramp showing itself. Terminal speed is above 681 and
-# nothing has measured it.
-#
-# Nothing anywhere models that ramp -- not commands.py, not the sim, which jumps
-# to full speed in one timestep. So this constant is only honest for moves of a
-# few metres. A 180 mm cell commands 0.264 s of drive, which is mostly ramp, and
-# will fall short. Short-move timing needs its own calibration.
+# mm/s at 100% duty. MEASURED 2026-08-31, mode 4.
+# TRAP: an AVERAGE FROM REST over ~5.9 m, not a terminal speed, and nothing models
+# the ramp. Short moves fall short. A 180 mm cell is 0.264 s, mostly ramp.
+# Provenance: CONSTANTS.md.
 MAX_WHEEL_SPEED_MMS = 681.0
 
 # Open-loop drive powers, signed fraction of full duty in [-1.0, 1.0].
@@ -180,21 +139,16 @@ SENSOR_ADC_CEILING = 65535       # 16-bit ADC saturation
 SENSOR_INTENSITY_SCALE = 4.5e7   # counts * mm^2
 SENSOR_DISTANCE_OFFSET_MM = 15.0 # emitter-to-target standoff in the 1/d^2 law
 
-# Render-only pixel scale. PX_PER_MM is the FALLBACK only: a 3x3 maze at a fixed
-# 0.25 px/mm is a 135 px window with 45 px cells, which is too small to click
-# accurately, and a 32x32 would not fit a laptop screen. The Renderer picks its
-# own scale per maze to fill RENDER_TARGET_WINDOW_PX and stores it on the
-# instance, so it stays the only place that knows about pixels (invariant 4).
+# Render-only. PX_PER_MM is a FALLBACK: the Renderer picks its own scale per maze
+# and stores it, so pixels stay inside the renderer (invariant 4).
 PX_PER_MM = 0.25
 TILE_PX = MM_PER_CELL * PX_PER_MM
 RENDER_TARGET_WINDOW_PX = 720     # longest window edge the renderer aims for (px)
 RENDER_MIN_TILE_PX = 24           # below this a cell is unclickable (px)
 RENDER_MAX_TILE_PX = 160          # above this a 3x3 fills the screen for nothing (px)
 
-# Render-only, PC-only. Every one of these was a literal inside renderer.py,
-# against invariant 5. They are here so the invariant holds without an exception,
-# not because the Pico will ever read them -- `sim/renderer.py` is the only
-# consumer and it never goes on the board.
+# Render-only, PC-only. Here so invariant 5 holds without an exception; only
+# sim/renderer.py reads them and it never goes on the board.
 RENDER_MARGIN_PX = 10            # blank border around the maze (px)
 RENDER_FPS = 60                  # display throttle, never gates physics (fps)
 RENDER_PATH_STEP_DELAY_S = 0.05  # per-cell delay when animating a planned route (s)
@@ -220,10 +174,8 @@ RENDER_TILE_REJECT = (220, 40, 40)     # a click the editor refused
 RENDER_HEADING_ARROW = (255, 120, 0)   # the start heading drawn on the start cell
 RENDER_HEADING_ARROW_PX = 3            # arrow line width (px)
 
-# The drawn route. Filling every visited cell one flat colour hides the ORDER,
-# which is the only thing a route is: a 3x3 snake through all nine cells looked
-# identical to any other. The polyline and its per-segment arrows carry the order
-# and the direction, and the fill drops back to a dim background tint.
+# The drawn route. A flat fill hides the ORDER, which is the only thing a route
+# is, so the polyline and its arrows carry order and direction instead.
 RENDER_ROUTE_LINE = (255, 255, 255)    # polyline through the cell centres
 RENDER_ROUTE_LINE_PX = 5               # polyline width (px)
 RENDER_ROUTE_ARROW_FRACTION = 0.16     # arrowhead size, of a cell (fraction)
@@ -234,8 +186,7 @@ RENDER_END_RING = (255, 90, 160)       # ring drawn inside the route's last cell
 RENDER_END_RING_PX = 5                 # ring line width (px)
 RENDER_END_RING_INSET = 0.22           # ring inset from the cell edge (fraction)
 
-# Editor status bar, drawn under the maze. Only the route editor asks for one;
-# every other mode builds a Renderer with no strip and is unchanged.
+# Editor status bar. Only the route editor asks for one.
 RENDER_HUD_PX = 54                     # height of the status strip (px)
 RENDER_HUD_BACKGROUND = (22, 22, 26)
 RENDER_HUD_TEXT = (215, 215, 220)
