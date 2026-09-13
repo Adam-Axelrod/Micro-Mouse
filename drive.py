@@ -1,7 +1,7 @@
 """The motor boundary: the one way anything in this project moves a wheel.
 
 Every mode drives through `drive_motors(left, right)` with signed power in
-[-1.0, 1.0]. That pair is the robot-boundary contract value (CLAUDE.md invariant
+[-1.0, 1.0]. That pair is the robot-boundary contract value (AGENTS.md invariant
 1), not a duty count, so it stays meaningful if the PWM encoding or the pin map
 changes underneath it.
 

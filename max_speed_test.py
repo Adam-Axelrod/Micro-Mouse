@@ -78,11 +78,6 @@ LAST_SAMPLES = None
 ENCODER_TOLERANCE = 0.02
 
 
-# One blink implementation for the whole project; this is the local alias so the
-# call sites below read the same as they always did.
-_blink = drive.blink_led
-
-
 def _append_log_row(row_text):
     """Append one result row, writing the header first if the file is new."""
     is_new = not maze.file_exists(config.MAX_SPEED_LOG_PATH)
@@ -357,11 +352,11 @@ def run(distance_mm=None, power=None, enable_render=False):
 
     # Arming signature: four fast blinks, the mode number, so the operator can
     # confirm mode 4 is what SW2 actually launched.
-    _blink(4, 80)
+    drive.blink_led(4, 80)
     time.sleep(0.5)
-    _blink(config.MAX_SPEED_TEST_COUNTDOWN_BLINKS,
-            config.MAX_SPEED_TEST_COUNTDOWN_MS,
-            config.MAX_SPEED_TEST_COUNTDOWN_MS)
+    drive.blink_led(config.MAX_SPEED_TEST_COUNTDOWN_BLINKS,
+                    config.MAX_SPEED_TEST_COUNTDOWN_MS,
+                    config.MAX_SPEED_TEST_COUNTDOWN_MS)
 
     # Zero the encoders at the start line. None means no decoder, which is the
     # normal case on this board today; the dash still runs and still times.
@@ -388,7 +383,7 @@ def run(distance_mm=None, power=None, enable_render=False):
     ticks_after = setup.read_encoders()
     left_ticks, right_ticks = ticks_after if ticks_after is not None else (0, 0)
 
-    _blink(2, 400, 400)
+    drive.blink_led(2, 400, 400)
 
     global LAST_RUN, LAST_SAMPLES
     LAST_SAMPLES = (sample_count, sample_times_ms, sample_left, sample_right)

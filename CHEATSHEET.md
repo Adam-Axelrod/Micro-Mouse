@@ -1,7 +1,7 @@
 # Robot cheatsheet
 
 Practical commands for driving the Gemini micromouse. For *why* things are the
-way they are, see the root `CLAUDE.md` and `Logs/`; this file is only
+way they are, see the root `AGENTS.md` and `Logs/`; this file is only
 "which command do I type".
 
 ---
@@ -25,7 +25,7 @@ that disagrees.
 
 ## 2. Getting code onto the Pico
 
-Minimal deployment set (`CLAUDE.md` §Dual-target). Anything importing `pygame`
+Minimal deployment set (`AGENTS.md` §Dual-target constraint). Anything importing `pygame`
 or `geometry` must never go on the board:
 
 ```

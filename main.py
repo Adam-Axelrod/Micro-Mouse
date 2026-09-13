@@ -35,7 +35,7 @@ def run_bench(**kwargs):
     """Mode 3. Imported lazily on purpose.
 
     `bench_test` is 914 lines and is NOT in the minimal deployment set
-    (CLAUDE.md, CHEATSHEET.md section 2). Importing it at module scope made a
+    (AGENTS.md, CHEATSHEET.md section 2). Importing it at module scope made a
     minimal Pico deployment fail to boot, and cost the RAM on every ordinary run.
     """
     import bench_test

@@ -18,7 +18,7 @@ if PACKAGE_DIR not in sys.path:
 
 import config
 
-# Copied to the board. CLAUDE.md and CHEATSHEET.md section 2 must agree with this.
+# Copied to the board. AGENTS.md and CHEATSHEET.md section 2 must agree with this.
 DEPLOYMENT_SET = (
     "main.py", "setup.py", "config.py", "drive.py", "maze.py", "explorer.py",
     "exploration.py", "speed_run.py", "search_algorithms.py", "commands.py",
