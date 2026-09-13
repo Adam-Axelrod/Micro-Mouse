@@ -16,7 +16,7 @@ if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
 import config
-from maze import MazeStructure
+from brain.maze import MazeStructure
 
 try:
     import pygame  # noqa: F401

@@ -9,8 +9,8 @@ if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
 import config
-import maze
-import search_algorithms as sa
+from brain import maze
+from brain import search_algorithms as sa
 
 
 def blank(cols=4, rows=4):

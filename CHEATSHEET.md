@@ -29,10 +29,17 @@ Minimal deployment set (`AGENTS.md` §Dual-target constraint). Anything importin
 or `geometry` must never go on the board:
 
 ```
-main.py setup.py config.py drive.py maze.py explorer.py exploration.py
-speed_run.py search_algorithms.py commands.py motor_log.py max_speed_test.py
-lap_log.py clock.py diagnostic_encoders.py  +  belief.num  +  route.mmc
+main.py setup.py config.py drive.py exploration.py speed_run.py
+motor_log.py max_speed_test.py lap_log.py clock.py diagnostic_encoders.py
+brain/__init__.py brain/maze.py brain/explorer.py brain/search_algorithms.py
+brain/commands.py
+                                  +  belief.num  +  route.mmc
 ```
+
+**`brain/` is a directory and must arrive as one.** Make it on the board before
+you copy into it, and copy its `__init__.py` too. MicroPython has no namespace
+packages, so a `brain/` without `__init__.py` fails at boot with a terse
+`ImportError`, which is the usual tell for an on-device fault.
 
 `diagnostic_encoders.py` is now part of the base set: `setup.py` loads it on
 first encoder read. `route.mmc` is what modes 5 and 6 drive, so copy the route
@@ -46,8 +53,13 @@ With `mpremote` (the VS Code MicroPico extension does the same thing via its
 "Upload project" command):
 
 ```bash
-mpremote cp main.py setup.py config.py drive.py maze.py explorer.py exploration.py speed_run.py search_algorithms.py commands.py motor_log.py max_speed_test.py lap_log.py clock.py diagnostic_encoders.py belief.num route.mmc :
+mpremote mkdir :brain
+mpremote cp main.py setup.py config.py drive.py exploration.py speed_run.py motor_log.py max_speed_test.py lap_log.py clock.py diagnostic_encoders.py belief.num route.mmc :
+mpremote cp brain/__init__.py brain/maze.py brain/explorer.py brain/search_algorithms.py brain/commands.py :brain/
 ```
+
+`mpremote mkdir` fails if `brain` already exists, which is harmless: run the two
+`cp` lines after it either way.
 
 ```bash
 mpremote repl
@@ -500,7 +512,7 @@ mpremote cp mazes/blank6x6.num :belief.num
 A blank 6×6 gives `[(0,0),(0,1),(0,2),(1,2),(2,2)]` → `['F 2', 'R', 'F 2', 'H']`.
 Verified in sim: lands 2.6 mm from the goal-cell centre.
 
-### Route verbs (`commands.py`)
+### Route verbs (`brain/commands.py`)
 
 `F n` drive forward n cells · `L` / `R` pivot 90° · `U` 180° · `H` halt.
 
@@ -520,5 +532,7 @@ python3 tests/run_all.py health   # logic | hardware | sim | health
 `health` is the one to run after moving anything: it catches a call to a symbol
 that moved, a deployment set that would not boot, and pygame escaping `sim/`.
 
-Inline self-tests: `python3 maze.py`, `python3 explorer.py`,
-`python3 search_algorithms.py`, `python3 commands.py`, `python3 motor_log.py`.
+Inline self-tests, from the repository root: `python3 -m brain.maze`,
+`python3 -m brain.explorer`, `python3 -m brain.search_algorithms`,
+`python3 -m brain.commands`, `python3 motor_log.py`. The `-m` matters for the
+`brain/` four: `python3 brain/maze.py` cannot find `config`.

@@ -74,8 +74,16 @@ print("OK")
 
 
 def _build_deployment(directory):
+    """Copy the deployment set into `directory`, TREE AND ALL.
+
+    The set holds paths, not bare filenames. Flattening brain/maze.py to
+    maze.py here would boot a layout the board will never have, and the
+    ImportError would arrive on the bench instead of in this test.
+    """
     for filename in DEPLOYMENT_SET:
-        shutil.copy(os.path.join(PACKAGE_DIR, filename), directory)
+        target = os.path.join(directory, filename)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copy(os.path.join(PACKAGE_DIR, filename), target)
     shutil.copy(os.path.join(PACKAGE_DIR, "routes", "lap3x3.mmc"),
                 os.path.join(directory, "route.mmc"))
     with open(os.path.join(directory, "machine.py"), "w") as handle:

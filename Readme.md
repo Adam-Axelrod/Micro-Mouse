@@ -13,7 +13,7 @@ Designed so the **exact same code** runs on both PC simulation and Pico hardware
 Four layers. Each knows the layer below it and nothing above.
 
 ```
- 1  PURE BRAIN -- cells and compass sides only; no pins, no mm, no pixels
+ 1  PURE BRAIN (brain/) -- cells and compass sides only; no pins, no mm, no pixels
     +-------------+ +--------------------+ +-------------+ +--------------+
     |   maze.py   | | search_algorithms  | | explorer.py | | commands.py  |
     | belief grid | |     flood fill     | |  belief +   | |  cells ->    |
@@ -65,7 +65,7 @@ the directory runs headless, which is what it does today.
   * **On Pico**: Loads MicroPython's native C `machine` module.
   * **On PC**: Loads desktop mock `sim_machine.py`, which integrates differential-drive physics and sensor raycasting.
 * **Discrete Belief vs. Continuous Geometry**:
-  * `MazeStructure` (`maze.py`): Lightweight grid representation `(x, y): (N, E, S, W)` used as the internal belief map on both PC and Pico.
+  * `MazeStructure` (`brain/maze.py`): Lightweight grid representation `(x, y): (N, E, S, W)` used as the internal belief map on both PC and Pico.
   * `MazeGeometry` (`sim/geometry.py`): Continuous $mm$-space raycasting physics used **only on PC** for simulation.
 * **`main.py` is a dispatcher and nothing else**: it registers the six modes, reads SW1/SW2 or a CLI flag, opens the motor trace around the run, and hands off. The behaviour lives in the mode modules.
 * **One motor boundary (`drive.py`)**: every mode moves a wheel through `drive_motors(left, right)` with signed power in `[-1.0, 1.0]`. No mode imports another mode to get a driver.
@@ -77,13 +77,13 @@ the directory runs headless, which is what it does today.
 When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboard LED blinks ($N$ blinks = Mode $N$), and **SW2 (Pin 14)** executes the selected mode:
 
 1. **Mode 1: Exploration Mode (`--step` / `--explorer`)** -- *simulation only*:
-   * Mouse explores the maze cell-by-cell using flood-fill (`search_algorithms.py`).
+   * Mouse explores the maze cell-by-cell using flood-fill (`brain/search_algorithms.py`).
    * Updates its `belief_map`, then exports the discovered layout to `belief.num`.
    * **It does not use a sensor.** `read_walls()` reads `groundtruth.num` directly. The simulated reflective sensors exist (`sim/mouse.py`, `sim/geometry.py`) but nothing yet converts an ADC reading into a sensed side, so this mode has no hardware path. It also never calls `drive_motors`, so the simulated body does not move -- only the logical `Explorer` advances.
 2. **Mode 2: Speed Run Mode (`--speed`)**:
    * Loads the saved grid map (`belief.num`) or `groundtruth.num`.
    * Calculates the optimal shortest path using flood fill.
-   * Translates the path into egocentric verbs (`F n`, `L`, `R`, `U`, `H`) via `commands.py`.
+   * Translates the path into egocentric verbs (`F n`, `L`, `R`, `U`, `H`) via `brain/commands.py`.
    * Drives the mouse through the movement sequence.
 3. **Mode 3: Bench Test Mode (`--bench`)**:
    * Runs bringing-up hardware checks end-to-end (`bench_test.py`).
@@ -110,10 +110,10 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`drive.py`** | The motor boundary. `drive_motors` / `stop_motors` / `run_motion_for` / `pivot_in_place` / `blink_led`, and the motor trace. Everything that moves a wheel goes through here. |
 | **`setup.py`** | Hardware pin definitions for motors, reflective sensors, buttons and encoders, plus `read_encoders()`. The single platform boundary. |
 | **`config.py`** | Single source of truth for physical scale (180 mm cells, wheel diameter, track width), timing, render colours, and file paths. |
-| **`maze.py`** | `MazeStructure` class and `.num` file reader (`num_file_import`) / writer (`num_file_export`). |
-| **`explorer.py`** | Pure `Explorer` class that manages belief maps and steps between cells. |
-| **`search_algorithms.py`** | Pure flood-fill distance transform and greedy descent pathfinding, plus `route_is_open` (the replan trigger). |
-| **`commands.py`** | Translates absolute cell routes into egocentric relative commands (`F n`, `L`, `R`, `U`, `H`), and reads and writes the `.mmc` route file, header included. |
+| **`brain/maze.py`** | `MazeStructure` class and `.num` file reader (`num_file_import`) / writer (`num_file_export`). |
+| **`brain/explorer.py`** | Pure `Explorer` class that manages belief maps and steps between cells. |
+| **`brain/search_algorithms.py`** | Pure flood-fill distance transform and greedy descent pathfinding, plus `route_is_open` (the replan trigger). |
+| **`brain/commands.py`** | Translates absolute cell routes into egocentric relative commands (`F n`, `L`, `R`, `U`, `H`), and reads and writes the `.mmc` route file, header included. |
 | **`exploration.py`** | Mode 1. Cell-by-cell exploration loop. Simulation only -- see section 2. |
 | **`speed_run.py`** | Modes 2, 5 and 6. Loads a belief, plans over it, and executes the verbs as timed open-loop drives; `follow()` drives a `.mmc` verbatim and `soak()` is that run long and logged. Owns the route, not the motors. |
 | **`bench_test.py`** | Mode 3. The BT-0..BT-8 hardware bring-up checks. Imported lazily by `main.py`; not in the minimal deployment set. |
@@ -164,8 +164,10 @@ has no pip. `sim` skips itself when pygame is absent. CI runs the suite on 3.10
 and 3.12, again with nothing installed, plus every headless mode and a
 trace-and-replay round trip.
 
-`maze.py`, `explorer.py`, `search_algorithms.py`, `commands.py` and
-`motor_log.py` also carry runnable inline self-tests (`python3 maze.py`).
+The four `brain/` modules and `motor_log.py` also carry runnable inline
+self-tests. Run them as modules, from the repository root: `python3 -m brain.maze`.
+`python3 brain/maze.py` does NOT work, because that puts `brain/` on the path
+instead of the root, and `config` then fails to import.
 
 To replay a hardware trace into the sim:
 ```bash

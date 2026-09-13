@@ -10,10 +10,10 @@ if PACKAGE_DIR not in sys.path:
 
 import tempfile
 
-import commands
+from brain import commands
 import config
-import maze
-import search_algorithms as sa
+from brain import maze
+from brain import search_algorithms as sa
 
 
 def test_turn_between_picks_the_shortest_pivot():

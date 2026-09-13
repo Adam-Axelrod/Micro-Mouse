@@ -13,7 +13,7 @@ if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
 import config
-from maze import MazeStructure
+from brain.maze import MazeStructure
 from sim.geometry import MazeGeometry, MazeSegments, cast_ray, merge_intervals
 from sim.mouse import MouseState
 from sim.sim_machine import simulation_engine

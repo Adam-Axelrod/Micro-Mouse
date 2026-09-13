@@ -1,5 +1,5 @@
 import config
-import maze
+from brain import maze
 
 ### Explorer Class ----------------------------------------------------------------------------------
 

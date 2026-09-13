@@ -49,9 +49,9 @@ PACKAGE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
-import commands  # noqa: E402
+from brain import commands  # noqa: E402
 import config  # noqa: E402
-import maze  # noqa: E402
+from brain import maze  # noqa: E402
 from sim import renderer  # noqa: E402
 
 

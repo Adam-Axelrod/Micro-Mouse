@@ -42,7 +42,7 @@ import time
 import clock
 import config
 import drive
-import maze
+from brain import maze
 import setup
 
 HAS_SIM = setup.sim is not None

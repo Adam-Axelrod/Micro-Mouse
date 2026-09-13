@@ -15,7 +15,7 @@ if PACKAGE_DIR not in sys.path:
 
 import tempfile
 
-import commands
+from brain import commands
 import config
 import setup
 import speed_run

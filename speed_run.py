@@ -12,12 +12,12 @@ import math
 import time
 
 import clock
-import commands
+from brain import commands
 import config
 import drive
 import lap_log
-import maze
-import search_algorithms
+from brain import maze
+from brain import search_algorithms
 import setup
 
 # Rendering is PC-only and optional. The `sim` package is never deployed to the

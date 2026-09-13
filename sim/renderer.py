@@ -4,7 +4,7 @@ import time
 import pygame
 
 import config
-import maze
+from brain import maze
 from sim import geometry
 
 def _load_font(size_px):

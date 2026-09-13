@@ -6,10 +6,10 @@ Pico and PC compatible.
 
 import config
 import drive
-import maze
-import search_algorithms
+from brain import maze
+from brain import search_algorithms
 import setup
-from explorer import Explorer
+from brain.explorer import Explorer
 
 try:
     from sim.renderer import make_renderer

@@ -9,8 +9,8 @@ if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
 import config
-import maze
-from explorer import Explorer
+from brain import maze
+from brain.explorer import Explorer
 
 
 def test_starts_at_the_start_facing_north():

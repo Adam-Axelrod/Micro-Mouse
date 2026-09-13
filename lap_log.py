@@ -25,7 +25,7 @@ Pico-portable: `time`, `config`, `maze`, `setup` only.
 import time
 
 import config
-import maze
+from brain import maze
 import setup
 
 LOG_FORMAT_VERSION = 1

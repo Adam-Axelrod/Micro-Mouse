@@ -13,9 +13,9 @@ PACKAGE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__
 if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
-import commands
+from brain import commands
 import config
-import maze
+from brain import maze
 
 try:
     import pygame  # noqa: F401
