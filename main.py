@@ -82,11 +82,6 @@ CLI_SWITCHES = {
 }
 
 
-def blink_led(times, on_duration_ms=100, off_duration_ms=None):
-    """Kept as an alias so REPL habits and bench_test keep working."""
-    drive.blink_led(times, on_duration_ms, off_duration_ms)
-
-
 def cli_options(argv, accepted):
     """The options this mode accepts, parsed from argv."""
     options = {}
