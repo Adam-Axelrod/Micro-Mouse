@@ -67,12 +67,15 @@ these without recomputing the product.
 | `WALL_WIDTH_MM` | 12 | DERIVED | `= POST_SIDE_MM`. |
 | `WALL_LENGTH_MM` | 168 | DERIVED | `MM_PER_CELL - POST_SIDE_MM`, written as a literal. The GAP between two posts. No reader in the codebase. |
 
-The printed wall part is 172.5 mm, and that is not a disagreement with the 168
-above: the part includes the tabs that seat into the posts at each end. A
-`classic-maze-wall-plus-1mm.stl` exists in `Maze Construction/` and takes the
-part to 173.5 mm. That change was a FIT tolerance, not a geometry change, and it
-has never been printed. The maze is built from the original walls. Nothing about
-either number reaches a run.
+The printed wall part is 172.5 mm long, which does not disagree with the 168
+above. The part carries a tab at each end that seats into a post, and 172.5 minus
+168 is 4.5 mm, so 2.25 mm per end. `lengthen_wall.py` confirms the shape: all 132
+vertices sit at `|x| >= 83.75`, spanning -86.25 to +86.25.
+
+`classic-maze-wall-plus-1mm.stl` takes the part to 173.5 mm, by moving each end
+out 0.5 mm. That was a FIT tolerance for how the tabs seat, not a geometry
+change, and it has never been printed. The maze is built from the original
+walls. Cell pitch is what a run is anchored to, and neither number touches it.
 
 ## Drive powers
 
