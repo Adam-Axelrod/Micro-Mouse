@@ -279,6 +279,33 @@ def test_working_files_are_not_tracked():
     print("✓ test_working_files_are_not_tracked passed")
 
 
+def test_constants_md_names_every_constant():
+    """CONSTANTS.md says where each number came from. config.py only says what.
+
+    A constant with no provenance is how a PROVISIONAL number gets treated as a
+    MEASURED one. This fails when config.py gains a constant and the document
+    does not, which is the only moment anybody knows the answer.
+    """
+    with open(os.path.join(PACKAGE_DIR, "config.py")) as handle:
+        source = handle.read()
+    with open(os.path.join(PACKAGE_DIR, "CONSTANTS.md")) as handle:
+        document = handle.read()
+    declared = []
+    for node in ast.parse(source).body:
+        targets = node.targets if isinstance(node, ast.Assign) else []
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id.isupper():
+                declared.append(target.id)
+        if isinstance(node, ast.Try):
+            for inner in node.body + [n for h in node.handlers for n in h.body]:
+                for target in getattr(inner, "targets", []):
+                    if isinstance(target, ast.Name) and target.id.isupper():
+                        declared.append(target.id)
+    missing = sorted({name for name in declared if name not in document})
+    assert not missing, "CONSTANTS.md does not mention: " + ", ".join(missing)
+    print("\u2713 test_constants_md_names_every_constant passed")
+
+
 def test_the_cheatsheet_names_every_deployed_file():
     """The operator copies the list in CHEATSHEET.md section 2, not DEPLOYMENT_SET."""
     with open(os.path.join(PACKAGE_DIR, "CHEATSHEET.md")) as handle:
@@ -301,6 +328,7 @@ TESTS = (
     test_documented_paths_point_somewhere_real,
     test_committed_fixtures_parse,
     test_working_files_are_not_tracked,
+    test_constants_md_names_every_constant,
     test_the_cheatsheet_names_every_deployed_file,
 )
 

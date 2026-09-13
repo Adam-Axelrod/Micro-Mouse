@@ -41,8 +41,9 @@ MOTOR_LOG_PATH = _package_path("motor_log.csv")
 MOTOR_LOG_POWER_EPSILON = 0.001  # commanded powers closer than this are "unchanged"
 
 # Straight-line max speed test (mode 4). Drives one open-loop dash at full duty
-# over a marked distance, so a stopwatch can put a measured number behind
-# MAX_WHEEL_SPEED_MMS below -- which has never been measured.
+# over a marked distance, and samples the encoders through it, so one run yields
+# both the average speed and the acceleration ramp. It produced the measured
+# MAX_WHEEL_SPEED_MMS below on 2026-08-31. Provenance: CONSTANTS.md.
 MAX_SPEED_LOG_PATH = _package_path("max_speed_test.csv")
 MAX_SPEED_TEST_DISTANCE_MM = 5200.0    # 5 m marked run, plus 200 mm of overrun
 MAX_SPEED_TEST_POWER = 1.0             # full duty: the point is the ceiling
