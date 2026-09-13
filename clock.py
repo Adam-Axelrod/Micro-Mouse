@@ -3,7 +3,7 @@
 The Pico really sleeps through a drive, so its wall clock times it. The PC steps
 physics instead and its wall clock barely moves, so in the sim only the sim's own
 clock means anything. Every mode that times something needs the same three lines,
-and `max_speed_test` used to carry the only copy.
+and `max_speed_test` and `motor_log` each used to carry a private copy.
 
 Pico-portable: `time`, `setup` only.
 """

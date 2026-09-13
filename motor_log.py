@@ -5,7 +5,7 @@ records every commanded motor power to a file on the Pico's own filesystem; copy
 it to the PC afterwards and `replay_log.py` re-drives the simulation from it, so
 a real run can be watched in the sim that could not observe it live.
 
-Pico-portable: standard builtins only (`time`), no os.path, no f-string-free
+Pico-portable: `clock`, `config` only, no os.path, no f-string-free
 constraints beyond what the rest of the deployment set already assumes.
 
 Format (v1), one header block then one record per line:
@@ -26,23 +26,10 @@ holds a power for the whole of each verb, so a full speed run is a few dozen
 lines. Replay therefore holds each power until the next timestamp.
 """
 
-import time
-
+import clock
 import config
 
 LOG_FORMAT_VERSION = 1
-
-# MicroPython counts milliseconds with ticks_ms(); CPython has no such call, so
-# fall back to monotonic(). Resolved once at import rather than per record.
-try:
-    _ticks_ms = time.ticks_ms
-    _ticks_diff = time.ticks_diff
-except AttributeError:  # CPython
-    def _ticks_ms():
-        return int(time.monotonic() * 1000.0)
-
-    def _ticks_diff(new, old):
-        return new - old
 
 
 class MotorLog:
@@ -50,12 +37,12 @@ class MotorLog:
 
     def __init__(self, path_str, power_epsilon=None, clock_ms=None):
         self.path_str = path_str
-        # Where "now" comes from. Defaults to the wall clock, which is correct on
-        # the Pico because the drive routines really do sleep. On PC they step
-        # physics instead, so sim time and wall time diverge completely and the
-        # caller must pass the sim's clock -- otherwise every record in a run
-        # lands on the same millisecond.
-        self.clock_ms = clock_ms if clock_ms is not None else _ticks_ms
+        # Where "now" comes from. Defaults to the project clock, which already
+        # knows which one this target runs on: the wall clock on the Pico, where
+        # the drive routines really do sleep, and the SIM clock on the PC, where
+        # they step physics instead and wall time barely moves. A caller may
+        # still inject its own -- that is how a test drives a fake clock.
+        self.clock_ms = clock_ms if clock_ms is not None else clock.now_ms
         # Powers closer together than this count as unchanged. Guards against a
         # float round-trip emitting a record that says nothing.
         self.power_epsilon = (
@@ -90,7 +77,7 @@ class MotorLog:
                     and abs(right_power - last_right) < self.power_epsilon):
                 return
 
-        elapsed_ms = _ticks_diff(self.clock_ms(), self._start_ticks)
+        elapsed_ms = clock.diff_ms(self.clock_ms(), self._start_ticks)
         self._file.write(f"{elapsed_ms},{left_power:.3f},{right_power:.3f}\n")
         self._last_powers = (left_power, right_power)
         self.records_written += 1
