@@ -42,6 +42,7 @@ live traps in `AGENTS.md` are mostly about the ways they can be wrong together.
 | `WHEEL_CIRCUMFERENCE_MM` | pi x 32 | DERIVED | From `WHEEL_DIAMETER_MM`. |
 | `MM_PER_TICK` | ~0.0718 | DERIVED | `WHEEL_CIRCUMFERENCE_MM / ENCODER_COUNTS_PER_WHEEL_REV`. Every distance the robot believes is `ticks x MM_PER_TICK`. |
 | `MAX_WHEEL_SPEED_MMS` | 681.0 | MEASURED | Mode 4, 2026-08-31: 5904 mm of wheel travel in 8.667 s, from the encoders, tape-agreed to 1.6%. An AVERAGE FROM REST over ~5.9 m, **not** a terminal speed. The same run gave 644 mm/s over 5.0 m, and that gap is the acceleration ramp. Nothing models the ramp, so this constant is only honest over metres. A 180 mm cell commands 0.264 s, which is almost all ramp, and falls short. |
+| `SIM_TRUE_WHEEL_SPEED_MMS` | 644.0 | MEASURED | The same 2026-08-31 dash, over the marked 5.0 m rather than the full 5.9 m, so it carries less of the ramp. This is what the SIMULATED robot does; `MAX_WHEEL_SPEED_MMS` is what the planner BELIEVES. **The two must stay apart.** The sim used to take the planner's constant, so every planned move landed on target and the sim could only confirm the planner. With its own truth it undershoots by the real 5.4%, and open-loop drift is measurable without a robot on the floor. Read it off `setup.sim.simulation_engine.max_wheel_speed_mms`, an instance attribute a test may set to anything. |
 
 **The trap that links them:** a pivot comes out at
 `90 x (V_real/V_cfg) x (W_cfg/W_real)` degrees. Before 2026-08-31 both speed and

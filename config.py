@@ -109,6 +109,16 @@ MM_PER_TICK = WHEEL_CIRCUMFERENCE_MM / ENCODER_COUNTS_PER_WHEEL_REV
 # Provenance: CONSTANTS.md.
 MAX_WHEEL_SPEED_MMS = 681.0
 
+# What the SIMULATED robot actually does, as opposed to what the planner above
+# believes. MEASURED on the same 2026-08-31 dash, over the marked 5.0 m rather
+# than the full 5.9 m, so it carries less of the acceleration ramp.
+# The two numbers must stay APART. The sim used to take its speed from the
+# planner's constant, so every planned move landed exactly on target and the sim
+# could only ever confirm the planner. With its own truth it undershoots by the
+# real 5.4%, and open-loop drift is measurable without the robot on the floor.
+# Provenance: CONSTANTS.md.
+SIM_TRUE_WHEEL_SPEED_MMS = 644.0
+
 # Open-loop drive powers, signed fraction of full duty in [-1.0, 1.0].
 # Provisional: derived from the motor model, not measured on the chassis.
 CRUISE_DUTY_POWER = 0.55

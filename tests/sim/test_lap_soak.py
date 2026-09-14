@@ -56,6 +56,26 @@ def soak_log_path():
     return config.SOAK_LOG_PATH
 
 
+class perfect_motors(object):
+    """Give the sim the planner's own constant for the body of a `with` block.
+
+    Route CLOSURE is geometry: the verbs come back to the cell they left. The sim
+    normally moves at `SIM_TRUE_WHEEL_SPEED_MMS`, slower than the planner
+    believes, so an honest run does NOT land on the start mark and cannot check
+    the geometry. Inside this block the two truths agree, and only the geometry
+    can fail.
+    """
+
+    def __enter__(self):
+        self.real = setup.sim.simulation_engine.max_wheel_speed_mms
+        setup.sim.simulation_engine.max_wheel_speed_mms = config.MAX_WHEEL_SPEED_MMS
+        return self
+
+    def __exit__(self, *_exc):
+        setup.sim.simulation_engine.max_wheel_speed_mms = self.real
+        return False
+
+
 def lap_rows(path):
     with open(path) as handle:
         return [line for line in handle
@@ -101,9 +121,10 @@ def test_every_logged_lap_carries_ticks_and_a_light_reading():
 
 
 def test_a_closed_route_returns_the_sim_mouse_to_its_start_cell():
-    """No ramp is modelled, so the sim should close a closed route exactly."""
+    """Given the planner's own speed, a closed route closes. That is geometry."""
     soak_log_path()
-    follow_route.run(soak=True, laps=2, route_path=VIA_CENTRE_ROUTE)
+    with perfect_motors():
+        follow_route.run(soak=True, laps=2, route_path=VIA_CENTRE_ROUTE)
     header = commands.read_route_header(VIA_CENTRE_ROUTE)
     state = setup.sim.get_mouse_state()
     start_x = (header["start"][0] + 0.5) * config.MM_PER_CELL
@@ -124,7 +145,8 @@ def test_a_retrace_makes_an_open_route_lappable():
 def test_a_retraced_lap_returns_the_sim_mouse_to_its_start_cell():
     path = write_route(OPEN_ROUTE)
     soak_log_path()
-    follow_route.run(soak=True, laps=2, route_path=path, retrace=True)
+    with perfect_motors():
+        follow_route.run(soak=True, laps=2, route_path=path, retrace=True)
     state = setup.sim.get_mouse_state()
     offset_mm = ((state.x_mm - 0.5 * config.MM_PER_CELL) ** 2
                  + (state.y_mm - 0.5 * config.MM_PER_CELL) ** 2) ** 0.5
@@ -132,7 +154,33 @@ def test_a_retraced_lap_returns_the_sim_mouse_to_its_start_cell():
     print("✓ test_a_retraced_lap_returns_the_sim_mouse_to_its_start_cell passed")
 
 
+def test_the_sim_misses_because_it_is_slower_than_the_planner_believes():
+    """The payoff of giving the sim its own truth: an open-loop run now MISSES.
+
+    Every pivot is timed at `MAX_WHEEL_SPEED_MMS` and turned at
+    `SIM_TRUE_WHEEL_SPEED_MMS`, so a quarter turn comes out 90 x 644/681 = 85.1
+    degrees, losing 4.9 degrees. Four turns a lap is close to 20 degrees, and it
+    accumulates. While the sim took the planner's constant this was invisible:
+    the run confirmed the planner instead of falsifying it.
+    """
+    assert config.SIM_TRUE_WHEEL_SPEED_MMS != config.MAX_WHEEL_SPEED_MMS, (
+        "the sim would only confirm the planner")
+
+    soak_log_path()
+    follow_route.run(soak=True, laps=1, route_path=VIA_CENTRE_ROUTE)
+    header = commands.read_route_header(VIA_CENTRE_ROUTE)
+    state = setup.sim.get_mouse_state()
+    start_x = (header["start"][0] + 0.5) * config.MM_PER_CELL
+    start_y = (header["start"][1] + 0.5) * config.MM_PER_CELL
+    offset_mm = ((state.x_mm - start_x) ** 2 + (state.y_mm - start_y) ** 2) ** 0.5
+    assert offset_mm > 10.0, ("the sim landed on the mark, so it is circular again: "
+                              "{:.1f} mm".format(offset_mm))
+    print("\u2713 test_the_sim_misses_because_it_is_slower_than_the_planner_believes"
+          " passed ({:.0f} mm short)".format(offset_mm))
+
+
 TESTS = (
+    test_the_sim_misses_because_it_is_slower_than_the_planner_believes,
     test_a_retrace_makes_an_open_route_lappable,
     test_a_retraced_lap_returns_the_sim_mouse_to_its_start_cell,
     test_a_route_that_does_not_return_to_its_start_cell_is_refused,

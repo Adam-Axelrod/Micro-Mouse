@@ -15,13 +15,15 @@ where the constant SAYS 5.2 m is. The gap between that point and the real 5.2 m
 mark measures the same error a second time. Two independent readings of one
 number, from one run.
 
-Beware the circular case: on the PC the sim both plans and simulates with
-MAX_WHEEL_SPEED_MMS, so a sim run always lands exactly on target. That proves
-the arithmetic and nothing about the chassis. Only the floor run is evidence.
+The sim used to be circular here: it planned and simulated with the same
+MAX_WHEEL_SPEED_MMS, so a sim run landed exactly on target and proved the
+arithmetic and nothing else. It now drives at SIM_TRUE_WHEEL_SPEED_MMS and
+undershoots, so a sim dash shows the SHAPE of the error. The size of it is still
+a floor measurement: only the tape says what the chassis does.
 
     On the Pico, from the REPL:
 
-        import max_speed_test
+        from modes import max_speed_test
         max_speed_test.run()                      # 5.2 m at full duty
         max_speed_test.run(distance_mm=3000)      # shorter dash
         max_speed_test.run(power=0.55)            # at cruise duty instead
@@ -424,8 +426,11 @@ def run(distance_mm=None, power=None, enable_render=False):
 
     if HAS_SIM:
         state = setup.sim.get_mouse_state()
-        print("Sim travelled {:.0f} mm (circular: the sim uses the same constant).".format(
-            state.y_mm - config.MM_PER_CELL / 2.0))
+        travelled_mm = state.y_mm - config.MM_PER_CELL / 2.0
+        print("Sim travelled {:.0f} mm of the {:.0f} mm commanded ({:+.1f}%).".format(
+            travelled_mm, distance_mm, (travelled_mm / distance_mm - 1.0) * 100.0))
+        print("  The sim drives at SIM_TRUE_WHEEL_SPEED_MMS and plans at")
+        print("  MAX_WHEEL_SPEED_MMS, so this is the shape of the error, not its size.")
 
     return commanded_seconds, measured_seconds
 
