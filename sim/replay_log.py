@@ -28,6 +28,7 @@ if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
 import config  # noqa: E402
+import files  # noqa: E402
 from brain import maze  # noqa: E402
 from record import motor_log  # noqa: E402
 from hal import setup  # noqa: E402

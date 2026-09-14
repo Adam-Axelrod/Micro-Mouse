@@ -51,6 +51,7 @@ if PACKAGE_DIR not in sys.path:
 
 from brain import commands  # noqa: E402
 import config  # noqa: E402
+import files  # noqa: E402
 from brain import maze  # noqa: E402
 from sim import renderer  # noqa: E402
 

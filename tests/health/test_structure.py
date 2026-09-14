@@ -168,6 +168,65 @@ def test_cross_module_calls_resolve():
     print("\u2713 test_cross_module_calls_resolve passed")
 
 
+def _bound_names(path):
+    """Every name the file binds locally: assignments, parameters, loops, with, except.
+
+    Anything here shadows a module name legitimately -- `to_ascii(maze, ...)`
+    takes a parameter called `maze`, and that is not a missing import.
+    """
+    names = set()
+    for node in ast.walk(_tree(path)):
+        # A LAZY import inside a function binds the name too. `main.run_bench`
+        # and `setup.get_encoders` both import this way on purpose.
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                names.add(alias.asname or alias.name)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            names.add(node.id)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            names.add(node.name)
+            args = node.args
+            for arg in args.posonlyargs + args.args + args.kwonlyargs:
+                names.add(arg.arg)
+            for arg in (args.vararg, args.kwarg):
+                if arg is not None:
+                    names.add(arg.arg)
+        elif isinstance(node, ast.ClassDef):
+            names.add(node.name)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            names.add(node.name)
+        elif isinstance(node, ast.Global):
+            names.update(node.names)
+    return names
+
+
+def test_a_module_reference_is_actually_imported():
+    """`files.file_exists(...)` with no `import files` above it.
+
+    CI caught this on 2026-09-14 and the suite did not: the NameError was inside
+    a function only `__main__` calls, so importing the module proved nothing.
+    A reference to a first-party module name that the file neither imports nor
+    binds is a missing import, and it fails at RUN time, not at import time.
+    """
+    module_names = {_module_name(p).split(".")[-1] for p in _local_modules()}
+    module_names |= {_module_name(p) for p in _local_modules() if "/" not in p}
+    module_names |= {p.split("/")[-1][:-3] for p in _sim_modules()}
+    module_names |= set(LOCAL_PACKAGES)
+
+    failures = []
+    for path in _local_modules() + [p.replace(".", "/") + ".py" for p in _sim_modules()]:
+        available = set(_import_bindings(path)) | _bound_names(path)
+        for name, attribute in sorted(_attribute_calls(path)):
+            if name in module_names and name not in available:
+                failures.append("{} calls {}.{} but never imports {}".format(
+                    path, name, attribute, name))
+    assert not failures, failures
+    print("\u2713 test_a_module_reference_is_actually_imported passed")
+
+
 def test_the_layers_hold():
     """AGENTS.md invariant 2, as a test instead of a review.
 
@@ -316,6 +375,7 @@ def test_the_cheatsheet_names_every_deployed_file():
 TESTS = (
     test_every_module_imports,
     test_cross_module_calls_resolve,
+    test_a_module_reference_is_actually_imported,
     test_the_layers_hold,
     test_every_package_ships_its_init,
     test_the_deployment_set_exists,
