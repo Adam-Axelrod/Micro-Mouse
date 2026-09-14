@@ -13,7 +13,8 @@ from brain import commands
 from brain import maze
 from brain import search_algorithms
 import config
-import drive
+import files
+from hal import drive
 import motion
 import world
 
@@ -23,7 +24,7 @@ def load_and_plan_route(belief_file_path=None, start_heading=config.DIRECTIONS[0
     if belief_file_path is None:
         belief_file_path = config.SAVED_BELIEF_MAZE
 
-    if not maze.file_exists(belief_file_path):
+    if not files.file_exists(belief_file_path):
         print("Warning: No saved belief at {}, using ground truth maze.".format(
             belief_file_path))
         belief_file_path = config.DEFAULT_MAZE

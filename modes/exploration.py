@@ -5,10 +5,10 @@ Pico and PC compatible.
 """
 
 import config
-import drive
+from hal import drive
 from brain import maze
 from brain import search_algorithms
-import setup
+from hal import setup
 from brain.explorer import Explorer
 
 try:

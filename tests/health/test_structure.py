@@ -23,27 +23,34 @@ import config
 # travels with it, and MicroPython has no namespace packages to paper over the
 # one that got left behind.
 DEPLOYMENT_SET = (
-    "main.py", "setup.py", "config.py", "drive.py", "motion.py", "world.py",
+    "main.py", "config.py", "files.py", "motion.py", "world.py",
+    "hal/__init__.py", "hal/setup.py", "hal/drive.py", "hal/clock.py",
+    "hal/diagnostic_encoders.py",
+    "record/__init__.py", "record/motor_log.py", "record/lap_log.py",
     "brain/__init__.py", "brain/maze.py", "brain/explorer.py",
     "brain/search_algorithms.py", "brain/commands.py",
     "modes/__init__.py", "modes/exploration.py", "modes/speed_run.py",
     "modes/follow_route.py", "modes/max_speed_test.py",
-    "motor_log.py", "lap_log.py", "clock.py", "diagnostic_encoders.py",
 )
 
 # First-party packages that DO go on the board, unlike sim/.
-LOCAL_PACKAGES = ("brain", "modes")
+LOCAL_PACKAGES = ("brain", "hal", "modes", "record")
 
 # Which package may import what. `config` and the MicroPython builtins are always
 # allowed; everything else must be listed. This is how a directory earns its
 # place: it encodes a rule that can fail, instead of sorting files by topic.
+# Root modules every layer may read, because none of them is a layer's business:
+# `config` is the numbers, `files` is os.stat without os.path.
+ALWAYS_ALLOWED = ("config", "files")
+
 LAYERS = {
-    "brain": {"brain"},   # AGENTS.md invariant 2: the brain stays pure.
+    "brain": {"brain"},          # AGENTS.md invariant 2: the brain stays pure.
+    "hal": {"hal", "record", "sim"},   # the board, and what it writes down.
+    "record": {"hal", "record"},       # an instrument reads the clock, nothing more.
     # D-016 as a test: `modes` is absent from this set, so no mode may import
-    # another mode. A mode that wants a driver takes `drive`, and a mode that
-    # wants the executor takes `motion`.
-    "modes": {"brain", "clock", "drive", "lap_log", "motion", "motor_log",
-              "setup", "sim", "world"},
+    # another mode. A mode that wants a driver takes `hal.drive`, and a mode
+    # that wants the executor takes `motion`.
+    "modes": {"brain", "hal", "motion", "record", "sim", "world"},
 }
 
 # Imported lazily, so it may sit outside the deployment set without breaking boot.
@@ -53,7 +60,7 @@ PICO_ONLY_BUILTINS = ("os", "sys", "time", "math", "gc", "array", "machine", "rp
 
 # Imports MicroPython's `machine`/`rp2` directly, so it cannot load on a PC.
 # setup.get_encoders() imports it lazily, on first use, for exactly this reason.
-PICO_ONLY_MODULES = ("diagnostic_encoders", "modes.bench_test")
+PICO_ONLY_MODULES = ("hal.diagnostic_encoders", "modes.bench_test")
 
 
 def _local_modules():
@@ -173,7 +180,7 @@ def test_the_layers_hold():
             continue
         for dotted in sorted(_import_bindings(path).values()):
             name = dotted.split(".")[0]
-            if name == "config" or name in PICO_ONLY_BUILTINS or name in LAYERS[package]:
+            if name in ALWAYS_ALLOWED or name in PICO_ONLY_BUILTINS or name in LAYERS[package]:
                 continue
             failures.append("{} imports {}, which {}/ may not reach".format(
                 path, dotted, package))
@@ -237,7 +244,7 @@ def test_only_setup_probes_the_platform():
     """Every other module must take its hardware handles from setup."""
     offenders = []
     for path in _local_modules():
-        if path in ("setup.py", "diagnostic_encoders.py", "modes/bench_test.py"):
+        if path in ("hal/setup.py", "hal/diagnostic_encoders.py", "modes/bench_test.py"):
             continue
         if "machine" in _toplevel_imports(path):
             offenders.append(path)

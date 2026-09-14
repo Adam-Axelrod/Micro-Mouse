@@ -17,7 +17,7 @@ if PACKAGE_DIR not in sys.path:
 
 from brain import commands
 import config
-import setup
+from hal import setup
 import world as sim_world
 
 TOLERANCE_MM = 1e-6

@@ -87,7 +87,7 @@ def save_route(route, out_path, maze_name, start_heading=None, grid=None):
         start_heading = config.ROUTE_EDITOR_START_HEADING
     movement_commands = commands.path_to_commands(route, start_heading)
     directory = out_path.rsplit("/", 1)[0]
-    if directory and directory != out_path and not maze.file_exists(directory):
+    if directory and directory != out_path and not files.file_exists(directory):
         os.makedirs(directory)
     with open(out_path, "w") as file_handle:
         file_handle.write(commands.render_command_file(

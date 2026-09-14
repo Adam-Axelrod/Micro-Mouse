@@ -52,9 +52,9 @@ class ADC:
 
 BOOT_CHECK = '''
 import sys
-import drive
+from hal import drive
 import main
-import setup
+from hal import setup
 
 assert setup.IS_HARDWARE, "the machine stub was not picked up"
 assert not [m for m in sys.modules if m == "sim" or m.startswith("sim.")], "sim/ was imported"
@@ -103,10 +103,10 @@ def test_a_deployment_missing_drive_fails_loudly():
     """Proves the check above can actually fail."""
     with tempfile.TemporaryDirectory() as directory:
         _build_deployment(directory)
-        os.remove(os.path.join(directory, "drive.py"))
+        os.remove(os.path.join(directory, "hal", "drive.py"))
         result = subprocess.run([sys.executable, "-c", BOOT_CHECK],
                                 cwd=directory, capture_output=True, text=True)
-        assert result.returncode != 0, "a deployment with no drive.py appeared to boot"
+        assert result.returncode != 0, "a deployment with no hal/drive.py appeared to boot"
     print("✓ test_a_deployment_missing_drive_fails_loudly passed")
 
 

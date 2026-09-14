@@ -19,11 +19,11 @@ try:
 except AttributeError:
     pass
 
-import drive
+from hal import drive
 from modes import exploration
 from modes import follow_route
 from modes import max_speed_test
-import setup
+from hal import setup
 from modes import speed_run
 
 # The e-stop printed in CHEATSHEET.md is `import main; main.stop_motors()`. It is

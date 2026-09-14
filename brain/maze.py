@@ -70,16 +70,6 @@ def num_file_export(path_str, cells):
                 file_handle.write(f"{x} {y} {int(n)} {int(e)} {int(s)} {int(w)}\n")
 
 
-def file_exists(path_str):
-    """os.path-free existence check. os.stat raises OSError for missing paths on
-    both CPython and MicroPython (whose os module has no `path` submodule)."""
-    try:
-        os.stat(path_str)
-        return True
-    except OSError:
-        return False
-
-
 def to_ascii(maze, path=None, mouse_pos=None):
     """Render maze structure as ASCII text string."""
     path_cells = set(path) if path else set()

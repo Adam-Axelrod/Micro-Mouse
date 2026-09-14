@@ -85,7 +85,7 @@ class Encoders:
     def __init__(self):
         # Pin numbers come from setup.py, the hardware boundary, so the encoder
         # wiring is recorded in the same place as every other pin.
-        import setup
+        from hal import setup
         self.left_counter = PIOQuadratureCounter(
             0, setup.LEFT_ENCODER_A, setup.LEFT_ENCODER_B)
         self.right_counter = PIOQuadratureCounter(

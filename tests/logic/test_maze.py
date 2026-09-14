@@ -11,7 +11,8 @@ if PACKAGE_DIR not in sys.path:
 import tempfile
 
 import config
-from brain.maze import MazeStructure, num_file_import, num_file_export, file_exists, to_ascii
+from brain.maze import MazeStructure, num_file_import, num_file_export, to_ascii
+from files import file_exists
 
 
 def test_blank_maze_is_walled_only_on_the_border():

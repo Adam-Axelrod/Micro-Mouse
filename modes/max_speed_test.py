@@ -39,12 +39,13 @@ import gc
 import math
 import time
 
-import clock
+from hal import clock
 import config
-import drive
+import files
+from hal import drive
 import motion
 from brain import maze
-import setup
+from hal import setup
 
 HAS_SIM = setup.sim is not None
 
@@ -81,7 +82,7 @@ ENCODER_TOLERANCE = 0.02
 
 def _append_log_row(row_text):
     """Append one result row, writing the header first if the file is new."""
-    is_new = not maze.file_exists(config.MAX_SPEED_LOG_PATH)
+    is_new = not files.file_exists(config.MAX_SPEED_LOG_PATH)
     try:
         with open(config.MAX_SPEED_LOG_PATH, "a") as file_handle:
             if is_new:
@@ -191,7 +192,7 @@ def _write_samples(count, times_ms, left_ticks, right_ticks, power, distance_mm)
     """
     if count <= 0:
         return
-    is_new = not maze.file_exists(config.MAX_SPEED_SAMPLE_LOG_PATH)
+    is_new = not files.file_exists(config.MAX_SPEED_SAMPLE_LOG_PATH)
     try:
         with open(config.MAX_SPEED_SAMPLE_LOG_PATH, "a") as file_handle:
             if is_new:

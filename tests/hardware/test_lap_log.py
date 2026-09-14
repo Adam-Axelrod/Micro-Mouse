@@ -12,7 +12,7 @@ if PACKAGE_DIR not in sys.path:
 
 import tempfile
 
-import lap_log
+from record import lap_log
 
 LIGHT = ((1200, 200), (900, 210), (1100, 205))
 

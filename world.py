@@ -10,7 +10,7 @@ Pico-portable: `config`, `setup`, `brain` only. The renderer import is guarded.
 
 import config
 from brain import maze
-import setup
+from hal import setup
 
 # Rendering is PC-only and optional. The `sim` package is never deployed to the
 # board, so on the Pico this import fails and every mode runs headless.

@@ -10,7 +10,7 @@ Pico-portable: `time`, `setup` only.
 
 import time
 
-import setup
+from hal import setup
 
 HAS_SIM = setup.sim is not None
 

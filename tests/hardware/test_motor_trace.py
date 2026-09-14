@@ -13,10 +13,10 @@ if PACKAGE_DIR not in sys.path:
 import tempfile
 
 import config
-import drive
+from hal import drive
 import motion
-import motor_log
-import setup
+from record import motor_log
+from hal import setup
 
 # Write the trace to a scratch file, never over the repository's motor_log.csv:
 # that file is a real measurement of a real run.

@@ -26,7 +26,7 @@ holds a power for the whole of each verb, so a full speed run is a few dozen
 lines. Replay therefore holds each power until the next timestamp.
 """
 
-import clock
+from hal import clock
 import config
 
 LOG_FORMAT_VERSION = 1

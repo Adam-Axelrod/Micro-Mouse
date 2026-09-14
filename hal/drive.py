@@ -20,8 +20,8 @@ Pico-portable: `time`, `config`, `setup`, `motor_log` only.
 import time
 
 import config
-import motor_log
-import setup
+from record import motor_log
+from hal import setup
 
 HAS_SIM = setup.sim is not None
 

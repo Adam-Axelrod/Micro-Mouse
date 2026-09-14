@@ -17,7 +17,7 @@ import tempfile
 
 from brain import commands
 import config
-import setup
+from hal import setup
 from modes import follow_route
 
 CLOSED_ROUTE = config.ROUTES_DIR + "/lap3x3.mmc"

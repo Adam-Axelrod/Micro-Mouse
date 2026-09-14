@@ -30,12 +30,13 @@ import time
 
 from brain import commands
 from brain import maze
-import clock
+from hal import clock
 import config
-import drive
-import lap_log
+import files
+from hal import drive
+from record import lap_log
 import motion
-import setup
+from hal import setup
 import world
 
 HAS_SIM = setup.sim is not None
@@ -47,7 +48,7 @@ def _load_route(route_path, laps, retrace=False):
     Parsing and validation happen BEFORE the motors are armed: a malformed or
     unloopable route must fail at the file, not halfway down a corridor.
     """
-    if not maze.file_exists(route_path):
+    if not files.file_exists(route_path):
         print("No route at {}. Draw one with sim/route_editor.py, or copy a".format(route_path))
         print("fixture from {} into place.".format(config.ROUTES_DIR))
         return None

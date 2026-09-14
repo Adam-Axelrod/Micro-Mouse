@@ -13,9 +13,9 @@ if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
 import config
-import drive
+from hal import drive
 import motion
-import setup
+from hal import setup
 
 OFF = 65535
 

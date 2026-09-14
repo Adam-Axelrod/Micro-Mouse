@@ -21,7 +21,7 @@ import math
 
 from brain import commands
 import config
-import drive
+from hal import drive
 
 
 def cruise_speed_mms(power=None):

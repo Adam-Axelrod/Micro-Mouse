@@ -19,14 +19,14 @@ in the sim by construction. The absolute column still carries the modelled wall
 distance. A zero difference on hardware means something; in the sim it means
 nothing.
 
-Pico-portable: `time`, `config`, `maze`, `setup` only.
+Pico-portable: `time`, `config`, `files`, `hal.setup` only.
 """
 
 import time
 
 import config
-from brain import maze
-import setup
+import files
+from hal import setup
 
 LOG_FORMAT_VERSION = 1
 LOG_HEADER = "# micromouse lap soak v{}\n".format(LOG_FORMAT_VERSION)
@@ -97,7 +97,7 @@ class LapLog:
         self.error = None
 
     def open(self, note=""):
-        is_new = not maze.file_exists(self.path)
+        is_new = not files.file_exists(self.path)
         try:
             self._file = open(self.path, "a")
             if is_new:
