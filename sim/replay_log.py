@@ -28,14 +28,15 @@ if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
 import config  # noqa: E402
-import maze  # noqa: E402
-import motor_log  # noqa: E402
-import setup  # noqa: E402
+import files  # noqa: E402
+from brain import maze  # noqa: E402
+from record import motor_log  # noqa: E402
+from hal import setup  # noqa: E402
 
 if setup.sim is None:
     raise SystemExit("replay_log.py is PC-only: there is no simulation to replay into.")
 
-import drive  # noqa: E402  -- the motor boundary, after the sim check
+from hal import drive  # noqa: E402  -- the motor boundary, after the sim check
 
 
 def replay(records, render_object=None, belief=None):
@@ -68,7 +69,7 @@ def main_cli():
     log_path = paths[0] if paths else config.MOTOR_LOG_PATH
     enable_render = "--render" in sys.argv or "-r" in sys.argv
 
-    if not maze.file_exists(log_path):
+    if not files.file_exists(log_path):
         raise SystemExit(
             f"No motor trace at {log_path}.\n"
             "Run the mouse with --log (PC) or on the Pico (always traced), then copy the file here."

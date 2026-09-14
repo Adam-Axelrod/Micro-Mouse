@@ -44,8 +44,8 @@ import math
 import time
 
 import config
-import drive
-import setup
+from hal import drive
+from hal import setup
 
 # --------------------------------------------------------------------------------------
 # Bench constants (invariant 5: no bare numbers in logic)

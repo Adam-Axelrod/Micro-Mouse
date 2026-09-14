@@ -11,7 +11,8 @@ if PACKAGE_DIR not in sys.path:
 import tempfile
 
 import config
-from maze import MazeStructure, num_file_import, num_file_export, file_exists, to_ascii
+from brain.maze import MazeStructure, num_file_import, num_file_export, to_ascii
+from files import file_exists
 
 
 def test_blank_maze_is_walled_only_on_the_border():
@@ -117,21 +118,24 @@ def test_file_exists_is_os_path_free():
 
 
 def test_shipped_maze_files_parse():
-    """Committed fixtures (groundtruth.num and every .num under mazes/) must
-    parse and describe full rectangles with a south border at (0,0). A malformed
-    maze is a silent wrong-maze run, not a crash."""
+    """Every committed maze fixture must parse and describe a full rectangle.
+
+    groundtruth.num is the sim's answer key, every .num under mazes/ is a
+    committed fixture, and belief.num is what a speed run drives. A malformed
+    one is a silent wrong-maze run, not a crash.
+
+    belief.num is a RUN ARTEFACT and is gitignored, so it is checked only when it
+    exists. Requiring it failed on any clean clone, which is every CI run.
+    """
     paths = [config.DEFAULT_MAZE]
-    if os.path.isdir(config.MAZES_DIR):
-        for entry in os.listdir(config.MAZES_DIR):
-            if entry.endswith(".num"):
-                paths.append(os.path.join(config.MAZES_DIR, entry))
-    # Also include fixtures from subdirectories (e.g. mazes/example_mazes/)
-    for root, dirs, files in os.walk(config.MAZES_DIR):
-        for f in files:
-            if f.endswith(".num"):
-                p = os.path.join(root, f)
-                if p not in paths:
-                    paths.append(p)
+    # os.walk covers MAZES_DIR itself as well as its subdirectories, so the
+    # example and test fixture folders come in without a second listdir pass.
+    for root, _dirs, files in os.walk(config.MAZES_DIR):
+        for name in sorted(files):
+            if name.endswith(".num"):
+                paths.append(os.path.join(root, name))
+    if file_exists(config.SAVED_BELIEF_MAZE):
+        paths.append(config.SAVED_BELIEF_MAZE)
     for path in paths:
         assert file_exists(path), path
         cells, cols, rows = num_file_import(path)

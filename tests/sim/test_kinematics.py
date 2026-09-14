@@ -13,7 +13,7 @@ if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
 import config
-from maze import MazeStructure
+from brain.maze import MazeStructure
 from sim.geometry import MazeGeometry, MazeSegments, cast_ray, merge_intervals
 from sim.mouse import MouseState
 from sim.sim_machine import simulation_engine
@@ -162,9 +162,15 @@ def test_nothing_in_range_reads_the_floor():
 ### Duty model ---------------------------------------------------------------
 
 def test_duty_maps_back_to_signed_wheel_speed():
-    """Active low: 65535 is OFF."""
+    """Active low: 65535 is OFF.
+
+    Full duty means the SIM's own top speed, not the planner's constant. The two
+    are deliberately different; see `SIM_TRUE_WHEEL_SPEED_MMS` in CONSTANTS.md.
+    """
     engine = simulation_engine
-    full = config.MAX_WHEEL_SPEED_MMS
+    full = engine.max_wheel_speed_mms
+    assert full != config.MAX_WHEEL_SPEED_MMS, (
+        "the sim is taking the planner's constant, so it can only confirm it")
 
     engine.set_motor_duty(3, 0)      # left forward
     engine.set_motor_duty(2, 65535)

@@ -8,7 +8,7 @@ simulated phototransistor light intensity values via raycasting.
 
 import math
 import config
-from maze import MazeStructure
+from brain.maze import MazeStructure
 from sim.geometry import MazeGeometry
 from sim.mouse import MouseState
 
@@ -22,7 +22,11 @@ class HardwareSimulation:
         self.left_rev_duty = 65535
         self.right_fwd_duty = 65535
         self.right_rev_duty = 65535
-        self.max_wheel_speed_mms = config.MAX_WHEEL_SPEED_MMS  # mm/s at 100% duty
+        # The SIM's own physical truth, deliberately not the planner's constant
+        # (config.MAX_WHEEL_SPEED_MMS). A simulation that moves at exactly the
+        # speed the planner divides by confirms the planner instead of
+        # falsifying it. An instance attribute, so a test may set it to anything.
+        self.max_wheel_speed_mms = config.SIM_TRUE_WHEEL_SPEED_MMS  # mm/s at 100% duty
         # Simulated time, advanced only by step_physics. On PC the drive routines
         # step physics instead of sleeping, so wall-clock time is NOT the sim's
         # clock -- anything timestamping sim events must read this instead.

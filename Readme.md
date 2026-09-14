@@ -13,31 +13,42 @@ Designed so the **exact same code** runs on both PC simulation and Pico hardware
 Four layers. Each knows the layer below it and nothing above.
 
 ```
- 1  PURE BRAIN -- cells and compass sides only; no pins, no mm, no pixels
+ 1  PURE BRAIN (brain/) -- cells and compass sides only; no pins, no mm, no pixels
     +-------------+ +--------------------+ +-------------+ +--------------+
     |   maze.py   | | search_algorithms  | | explorer.py | | commands.py  |
     | belief grid | |     flood fill     | |  belief +   | |  cells ->    |
     | + .num I/O  | |  + route_is_open   | |  position   | | F n/L/R/U/H  |
     +-------------+ +--------------------+ +-------------+ +--------------+
 
- 2  MODES -- turn a plan into timed motor powers
-    +-----------+ +-------------+ +--------------+ +--------------+ +------------+
-    |  main.py  | | exploration | |  speed_run   | |  bench_test  | | max_speed_ |
-    | SW1/SW2 + | |   mode 1    | |    mode 2    | |    mode 3    | |    test    |
-    | dispatch  | |             | | route + exec | | lazy import  | | modes 4, 5 |
-    +-----------+ +-------------+ +--------------+ +--------------+ +------------+
-                         |              |                |               |
-                         +--------------+----------------+---------------+
+ 2  MODES/ -- one module per mode. No mode imports another mode.
+    +-----------+ +-------------+ +------------+ +------------+ +------------+
+    |  main.py  | | exploration | | speed_run  | | bench_test | | max_speed_ |
+    | SW1/SW2 + | |   mode 1    | |   mode 2   | |   mode 3   | |    test    |
+    | dispatch  | |             | | plan+drive | |lazy import | |   mode 4   |
+    +-----------+ +-------------+ +------------+ +------------+ +------------+
+                                  +------------------------+
+                                  |     follow_route       |
+                                  | mode 5, and --soak     |
+                                  +------------------------+
+                         |              |            |            |
+                         +--------------+------------+------------+
                                         v
- 3  MOTOR BOUNDARY      +--------------------------------------------+
-                        |                  drive.py                  |
-                        |   drive_motors(left, right), [-1.0, 1.0]   |
-                        |   stop_motors, run_motion_for, pivot,      |
-                        |   blink_led, the motor trace               |
+ 3  MOTION LAYER        +--------------------------------------------+
+                        |                 motion.py                  |
+                        |  the ONE place a distance or an angle       |
+                        |  becomes a DURATION. execute(verbs),        |
+                        |  forward_seconds, pivot_seconds, lap_seconds|
                         +--------------------------------------------+
                                         |
- 4  PLATFORM BOUNDARY   +--------------------------------------------+
-                        |                  setup.py                  |
+ 4  MOTOR BOUNDARY      +--------------------------------------------+
+                        |                hal/drive.py                |
+                        |   drive_motors(left, right), [-1.0, 1.0]   |
+                        |   stop_motors, run_motion_for, pivot_for,  |
+                        |   blink_led, the motor trace. NO timing.   |
+                        +--------------------------------------------+
+                                        |
+ 5  PLATFORM BOUNDARY   +--------------------------------------------+
+                        |                hal/setup.py                |
                         |  the ONLY "try: from machine import ..."   |
                         |  every pin, PWM, ADC, read_encoders()      |
                         +--------------------------------------------+
@@ -53,22 +64,22 @@ Four layers. Each knows the layer below it and nothing above.
 ```
 
 **The `sim/` rule.** Anything in `sim/` is PC-only and is never copied to the
-Pico. Nothing imports it unconditionally: `setup.py` reaches for
-`sim.sim_machine` only when the real `machine` module is absent, and the mode
-modules guard `sim.renderer` behind a `try/except ImportError`. A board without
+Pico. Nothing imports it unconditionally: `hal/setup.py` reaches for
+`sim.sim_machine` only when the real `machine` module is absent, and `world.py`
+guards `sim.renderer` behind a `try/except ImportError`. A board without
 the directory runs headless, which is what it does today.
 
 ### Summary
 
 * **Zero Standard Library Dependencies for Firmware**: Core logic on Pico uses standard MicroPython modules (`os`, `time`, `math`, `machine`). Desktop-only libraries like `pygame` are restricted to PC simulation wrappers.
-* **Unified Hardware Abstraction (`setup.py`)**: Defines physical pin mappings, PWM channels, ADC sensor inputs, and button handles.
+* **Unified Hardware Abstraction (`hal/setup.py`)**: Defines physical pin mappings, PWM channels, ADC sensor inputs, and button handles.
   * **On Pico**: Loads MicroPython's native C `machine` module.
   * **On PC**: Loads desktop mock `sim_machine.py`, which integrates differential-drive physics and sensor raycasting.
 * **Discrete Belief vs. Continuous Geometry**:
-  * `MazeStructure` (`maze.py`): Lightweight grid representation `(x, y): (N, E, S, W)` used as the internal belief map on both PC and Pico.
+  * `MazeStructure` (`brain/maze.py`): Lightweight grid representation `(x, y): (N, E, S, W)` used as the internal belief map on both PC and Pico.
   * `MazeGeometry` (`sim/geometry.py`): Continuous $mm$-space raycasting physics used **only on PC** for simulation.
 * **`main.py` is a dispatcher and nothing else**: it registers the six modes, reads SW1/SW2 or a CLI flag, opens the motor trace around the run, and hands off. The behaviour lives in the mode modules.
-* **One motor boundary (`drive.py`)**: every mode moves a wheel through `drive_motors(left, right)` with signed power in `[-1.0, 1.0]`. No mode imports another mode to get a driver.
+* **One motor boundary (`hal/drive.py`)**: every mode moves a wheel through `drive_motors(left, right)` with signed power in `[-1.0, 1.0]`. No mode imports another mode to get a driver.
 
 ---
 
@@ -77,27 +88,29 @@ the directory runs headless, which is what it does today.
 When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboard LED blinks ($N$ blinks = Mode $N$), and **SW2 (Pin 14)** executes the selected mode:
 
 1. **Mode 1: Exploration Mode (`--step` / `--explorer`)** -- *simulation only*:
-   * Mouse explores the maze cell-by-cell using flood-fill (`search_algorithms.py`).
+   * Mouse explores the maze cell-by-cell using flood-fill (`brain/search_algorithms.py`).
    * Updates its `belief_map`, then exports the discovered layout to `belief.num`.
    * **It does not use a sensor.** `read_walls()` reads `groundtruth.num` directly. The simulated reflective sensors exist (`sim/mouse.py`, `sim/geometry.py`) but nothing yet converts an ADC reading into a sensed side, so this mode has no hardware path. It also never calls `drive_motors`, so the simulated body does not move -- only the logical `Explorer` advances.
 2. **Mode 2: Speed Run Mode (`--speed`)**:
    * Loads the saved grid map (`belief.num`) or `groundtruth.num`.
    * Calculates the optimal shortest path using flood fill.
-   * Translates the path into egocentric verbs (`F n`, `L`, `R`, `U`, `H`) via `commands.py`.
+   * Translates the path into egocentric verbs (`F n`, `L`, `R`, `U`, `H`) via `brain/commands.py`.
    * Drives the mouse through the movement sequence.
 3. **Mode 3: Bench Test Mode (`--bench`)**:
-   * Runs bringing-up hardware checks end-to-end (`bench_test.py`).
+   * Runs bringing-up hardware checks end-to-end (`modes/bench_test.py`).
 4. **Mode 4: Max Speed Test (`--maxspeed`)**:
    * Drives one straight dash at full duty over a marked distance (5.2 m by default), then brakes hard.
    * The LED goes solid for the whole drive, so a stopwatch can time a marked 5 m. See `CHEATSHEET.md` §5.1.
    * Captures the encoder ticks either side of the dash. `calibrate(travelled_mm, stopwatch_s)` yields `MAX_WHEEL_SPEED_MMS` from the stopwatch, and checks the decoder against the ruler-confirmed wheel: an implied diameter above 32 mm means edges are being dropped.
-5. **Mode 5: Stress Test (`--stress`)**:
-   * N laps of the sprint (default 20 × 5 m, ~11 min), reversing between legs, then reports accumulated drift.
-   * Reversing cancels symmetric error, so it measures asymmetry, encoder dropout and battery sag. `turn_around=True` pivots 180° instead, letting distance and turn error accumulate.
-   * Either button aborts between legs.
-6. **Mode 6: Follow Route (`--follow`)**:
-   * Drives `route.mmc` verbatim, open-loop. No planning; tests the drive layer. Drawn with `sim/route_editor.py`.
+5. **Mode 5: Follow Route (`--follow`)**:
+   * Drives a hand-authored `.mmc` verbatim, so the planner is not a suspect if the robot ends up in the wrong place. `--route=`, `--map=` and `--laps=` select the file, the world and the lap count.
 
+   **The lap soak (`--soak`) is this mode with a preset**, not a mode of its own: it was the same code down the same path and could only differ in its defaults.
+   * Drives the route in `route.mmc` 30 times at a gentler duty than a speed run (0.40), and appends one row per lap to `lap_soak.csv`.
+   * Each row carries the ticks, the per-lap tick deltas, the heading residual against what the route commanded, and both halves of each light sensor reading. The light columns are for the wall-distance work still to come: the same pose read thirty times says how repeatable the sensors are.
+   * Refuses more than one lap of a route that does not return to its start **cell and heading**, because lap 2 would set off from the wrong square. `commands.walk_route` vets it before the motors arm.
+   * `--retrace` closes an open route instead: a U-turn, the path walked backwards, a U-turn home. It cancels its own symmetric error (equal shortfall each way, right turns becoming left turns), so it measures the pivot above all -- `commands.with_return_leg` says so at the call site.
+   * The report looks for what only a long run shows: a heading residual of one sign every lap (a mistimed turn), a falling tick count (battery sag), a lap far below the median (an encoder dropout). Either button aborts between laps. See `CHEATSHEET.md` §5.2.
 ---
 
 ## 3. Module Guide
@@ -105,19 +118,25 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | File | Purpose |
 | :--- | :--- |
 | **`main.py`** | Dispatcher. Registers `MODES`, reads SW1/SW2 or a CLI flag, opens and closes the motor trace around the run. Keeps a `stop_motors` alias for the REPL e-stop. |
-| **`drive.py`** | The motor boundary. `drive_motors` / `stop_motors` / `run_motion_for` / `pivot_in_place` / `blink_led`, and the motor trace. Everything that moves a wheel goes through here. |
-| **`setup.py`** | Hardware pin definitions for motors, reflective sensors, buttons and encoders, plus `read_encoders()`. The single platform boundary. |
+| **`motion.py`** | The motion layer: the ONE place a distance or an angle becomes a duration. `execute` (the verb executor), `forward_seconds`, `pivot_seconds`, `lap_seconds`. Every open-loop error is made here. |
+| **`world.py`** | The one place the sim world and the renderer are set up. Returns `None` on the board, so a mode runs headless. |
+| **`files.py`** | `file_exists`: `os.stat` without `os.path`, which MicroPython does not have. Root level beside `config.py`, because every layer needs it. |
+| **`hal/drive.py`** | The motor boundary. `drive_motors` / `stop_motors` / `run_motion_for` / `pivot_for` / `blink_led`, and the motor trace. Everything that moves a wheel goes through here, and nothing here computes a duration. |
+| **`hal/setup.py`** | Hardware pin definitions for motors, reflective sensors, buttons and encoders, plus `read_encoders()`. The single platform boundary. |
 | **`config.py`** | Single source of truth for physical scale (180 mm cells, wheel diameter, track width), timing, render colours, and file paths. |
-| **`maze.py`** | `MazeStructure` class and `.num` file reader (`num_file_import`) / writer (`num_file_export`). |
-| **`explorer.py`** | Pure `Explorer` class that manages belief maps and steps between cells. |
-| **`search_algorithms.py`** | Pure flood-fill distance transform and greedy descent pathfinding, plus `route_is_open` (the replan trigger). |
-| **`commands.py`** | Translates absolute cell routes into egocentric relative commands (`F n`, `L`, `R`, `U`, `H`) and writes the `.mmc` route file. |
-| **`exploration.py`** | Mode 1. Cell-by-cell exploration loop. Simulation only -- see section 2. |
-| **`speed_run.py`** | Mode 2. Loads a belief, plans over it, and executes the verbs as timed open-loop drives. Owns the route, not the motors. |
-| **`bench_test.py`** | Mode 3. The BT-0..BT-8 hardware bring-up checks. Imported lazily by `main.py`; not in the minimal deployment set. |
-| **`max_speed_test.py`** | Modes 4 and 5. One straight dash over a marked distance, sampling the encoders as it goes so the acceleration ramp and terminal speed come out of a single run. Plus `calibrate()` and the N-lap stress run. |
-| **`motor_log.py`** | Change-only CSV trace of commanded motor powers (format v1). Written on every hardware run, and on `--log` from the PC. |
-| **`diagnostic_encoders.py`** | PIO quadrature encoder counter. Takes its pins from `setup.py` and is reached through `setup.read_encoders()`, never imported directly. |
+| **`brain/maze.py`** | `MazeStructure` class and `.num` file reader (`num_file_import`) / writer (`num_file_export`). |
+| **`brain/explorer.py`** | Pure `Explorer` class that manages belief maps and steps between cells. |
+| **`brain/search_algorithms.py`** | Pure flood-fill distance transform and greedy descent pathfinding, plus `route_is_open` (the replan trigger). |
+| **`brain/commands.py`** | Translates absolute cell routes into egocentric relative commands (`F n`, `L`, `R`, `U`, `H`), and reads and writes the `.mmc` route file, header included. |
+| **`modes/exploration.py`** | Mode 1. Cell-by-cell exploration loop. Simulation only -- see section 2. |
+| **`modes/speed_run.py`** | Mode 2, and the only mode that PLANS. Loads a belief, floods it, turns the path into verbs and hands them to `motion.execute`. Owns the route, not the motors and not the timing. |
+| **`modes/follow_route.py`** | Mode 5. Drives a `.mmc` verbatim, `laps` times. `soak=True` (`--soak`) is the same run, long and logged. |
+| **`modes/bench_test.py`** | Mode 3. The BT-0..BT-8 hardware bring-up checks. Imported lazily by `main.py`; not in the minimal deployment set. |
+| **`modes/max_speed_test.py`** | Mode 4. One straight dash over a marked distance, sampling the encoders as it goes so the acceleration ramp and terminal speed come out of a single run. Plus `calibrate()`. |
+| **`record/lap_log.py`** | The soak's instrument. One CSV row per lap, and the lit-minus-unlit sensor read. Never raises at the call site: a dead log must not end a twenty minute run. |
+| **`hal/clock.py`** | Which clock a timed run uses. The Pico sleeps and its wall clock is real; the PC steps physics and only the sim clock means anything. |
+| **`record/motor_log.py`** | Change-only CSV trace of commanded motor powers (format v1). Written on every hardware run, and on `--log` from the PC. |
+| **`hal/diagnostic_encoders.py`** | PIO quadrature encoder counter. Takes its pins from `hal/setup.py` and is reached through `setup.read_encoders()`, never imported directly. |
 | **`groundtruth.num`** | Default ground-truth maze fixture used by PC simulation. |
 | **`belief.num`** | Untracked working file (gitignored): the current map the robot drives. Written by mode 1; hand-authored file used by mode 2 on hardware. Not committed; fixtures live under `mazes/`. |
 
@@ -125,12 +144,12 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 
 | File | Purpose |
 | :--- | :--- |
-| **`sim/sim_machine.py`** | Mock MicroPython `machine` module (`Pin`, `PWM`, `ADC`). Writing a PWM duty steps the physics instead of driving a pin. |
+| **`sim/sim_machine.py`** | Mock MicroPython `machine` module (`Pin`, `PWM`, `ADC`). Writing a PWM duty steps the physics instead of driving a pin. It drives at `SIM_TRUE_WHEEL_SPEED_MMS`, deliberately NOT the constant the planner divides by, so a sim run falsifies the planner instead of confirming it. |
 | **`sim/mouse.py`** | `MouseState` continuous pose integration (exact-arc differential drive), encoder tick accumulation, and the phototransistor ADC model. |
 | **`sim/geometry.py`** | `MazeGeometry` mm-space wall segments and post polygons, and the `cast_ray()` engine. |
 | **`sim/renderer.py`** | Optional Pygame renderer, plus `make_renderer()` so no mode has to import another mode in order to draw. |
 | **`sim/replay_log.py`** | Re-drives the sim from a Pico `motor_log.csv`. The gap between the replayed pose and where the robot really stopped is the measurement. |
-| **`sim/route_editor.py`** | Draw a route by clicking cells; writes `.mmc`. Refuses a step that is not adjacent or that crosses a wall. |
+| **`sim/route_editor.py`** | Draw a route by clicking cells on any grid size; writes `.mmc` with the start pose and goal in its header. Refuses a step that is not adjacent or that crosses a wall. |
 
 ---
 
@@ -160,8 +179,10 @@ has no pip. `sim` skips itself when pygame is absent. CI runs the suite on 3.10
 and 3.12, again with nothing installed, plus every headless mode and a
 trace-and-replay round trip.
 
-`maze.py`, `explorer.py`, `search_algorithms.py`, `commands.py` and
-`motor_log.py` also carry runnable inline self-tests (`python3 maze.py`).
+The four `brain/` modules and `record/motor_log.py` also carry runnable inline
+self-tests. Run them as modules, from the repository root: `python3 -m brain.maze`.
+`python3 brain/maze.py` does NOT work, because that puts `brain/` on the path
+instead of the root, and `config` then fails to import.
 
 To replay a hardware trace into the sim:
 ```bash
@@ -169,5 +190,5 @@ python3 sim/replay_log.py --render
 ```
 
 ### Running on Pico W Hardware
-1. Copy the deployment set to the Pico's root filesystem -- **not** the whole directory. `sim/` must never go on the board, and `bench_test.py` is optional. `CHEATSHEET.md` section 2 has the exact `mpremote` line.
+1. Copy the deployment set to the Pico's root filesystem -- **not** the whole directory. `sim/` must never go on the board, and `modes/bench_test.py` is optional. `CHEATSHEET.md` section 2 has the exact `mpremote` line.
 2. MicroPython automatically executes `main.py` on power-up.

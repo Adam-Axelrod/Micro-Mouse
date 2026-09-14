@@ -16,12 +16,12 @@ if PACKAGE_DIR not in sys.path:
     sys.path.insert(0, PACKAGE_DIR)
 
 import config
-from maze import MazeStructure
+from brain.maze import MazeStructure
 
 try:
     import pygame  # noqa: F401
     from sim.geometry import MazeGeometry
-    from sim.renderer import Renderer, make_renderer
+    from sim.renderer import Renderer, make_renderer, tile_px_for
     HAS_PYGAME = True
 except ImportError:
     HAS_PYGAME = False
@@ -32,12 +32,42 @@ def _view(cols=16, rows=16):
 
 
 def test_a_renderer_constructs_at_every_grid_size():
-    for cols, rows in ((3, 3), (6, 6), (16, 16), (3, 6)):
+    for cols, rows in ((3, 3), (6, 6), (16, 16), (3, 6), (32, 32), (1, 1)):
         view = _view(cols, rows)
-        expected = (cols * int(config.TILE_PX) + 2 * config.RENDER_MARGIN_PX,
-                    rows * int(config.TILE_PX) + 2 * config.RENDER_MARGIN_PX)
+        tile = tile_px_for(cols, rows)
+        expected = (cols * tile + 2 * config.RENDER_MARGIN_PX,
+                    rows * tile + 2 * config.RENDER_MARGIN_PX)
         assert view.screen.get_size() == expected, (cols, rows, view.screen.get_size())
     print("✓ test_a_renderer_constructs_at_every_grid_size passed")
+
+
+def test_the_tile_scale_stays_clickable_and_bounded():
+    """A fixed scale served 16x16 alone: a 3x3 was a 135 px window."""
+    for cols, rows in ((1, 1), (3, 3), (6, 6), (16, 16), (32, 32), (3, 16)):
+        tile = tile_px_for(cols, rows)
+        assert config.RENDER_MIN_TILE_PX <= tile <= config.RENDER_MAX_TILE_PX, (cols, rows, tile)
+        longest_px = tile * max(cols, rows)
+        assert longest_px <= config.RENDER_TARGET_WINDOW_PX or tile == config.RENDER_MIN_TILE_PX
+    assert tile_px_for(3, 3) > tile_px_for(16, 16), "a small grid must draw bigger cells"
+    print("✓ test_the_tile_scale_stays_clickable_and_bounded passed")
+
+
+def test_a_click_lands_in_the_right_cell_at_every_grid_size():
+    """cell_at_px is the editor's whole input path, and the scale now varies."""
+    for cols, rows in ((3, 3), (6, 6), (16, 16), (3, 16)):
+        view = _view(cols, rows)
+        for cell in ((0, 0), (cols - 1, rows - 1), (cols // 2, rows // 2)):
+            centre_mm = ((cell[0] + 0.5) * config.MM_PER_CELL,
+                         (cell[1] + 0.5) * config.MM_PER_CELL)
+            assert view.cell_at_px(view._px(*centre_mm)) == cell, (cols, rows, cell)
+    print("✓ test_a_click_lands_in_the_right_cell_at_every_grid_size passed")
+
+
+def test_draw_paints_a_heading_arrow():
+    view = _view(3, 3)
+    for side in config.DIRECTIONS:
+        view.draw(None, heading_marks={(1, 1): side})
+    print("✓ test_draw_paints_a_heading_arrow passed")
 
 
 def test_make_renderer_returns_a_renderer_not_none():
@@ -93,6 +123,9 @@ def test_cell_at_px_rejects_clicks_outside_the_grid():
 
 TESTS = (
     test_a_renderer_constructs_at_every_grid_size,
+    test_the_tile_scale_stays_clickable_and_bounded,
+    test_a_click_lands_in_the_right_cell_at_every_grid_size,
+    test_draw_paints_a_heading_arrow,
     test_make_renderer_returns_a_renderer_not_none,
     test_draw_survives_every_optional_argument,
     test_draw_accepts_a_caller_with_no_belief_map,

@@ -64,6 +64,13 @@ jobs:
           python main.py --maxspeed
           cp routes/lap3x3.mmc route.mmc
           python main.py --follow --map=mazes/test_mazes/blank3x3.num --laps=3
+          # No --map: the world comes from the route header's own grid size.
+          python main.py --follow --laps=2
+          python main.py --soak --laps=3 --power=0.3
+          test -s lap_soak.csv
+          # Mode 5 must refuse a route that does not return to its start cell.
+          cp routes/perimeter3x3.mmc route.mmc
+          python main.py --soak --laps=3 | grep -q "REFUSING"
 
       - name: Trace a run, then replay it into the sim
         run: |
@@ -75,9 +82,14 @@ jobs:
         run: |
           python main.py --speed --render
           python main.py --follow --map=mazes/test_mazes/blank3x3.num --render
+          cp routes/lap3x3.mmc route.mmc
+          python main.py --soak --laps=2 --render
 
+      # Run as MODULES, not files: `python brain/maze.py` puts brain/ on the
+      # path instead of the repository root, and the import fails.
       - name: Inline self-tests
         run: |
-          for module in maze explorer search_algorithms commands motor_log; do
-            python "$module.py"
+          for module in brain.maze brain.explorer brain.search_algorithms \
+                        brain.commands record.motor_log; do
+            python -m "$module"
           done

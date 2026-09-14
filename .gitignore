@@ -9,7 +9,7 @@ __pycache__/
 motor_log.csv
 max_speed_test.csv
 max_speed_samples.csv
-stress_test.csv
+lap_soak.csv
 .lavish/
 
 # Working files: the map and the route currently loaded on the robot.

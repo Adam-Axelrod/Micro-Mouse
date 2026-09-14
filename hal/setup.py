@@ -88,7 +88,7 @@ def get_encoders():
     if _encoders is None and encoder_error is None:
         try:
             if IS_HARDWARE:
-                from diagnostic_encoders import Encoders
+                from hal.diagnostic_encoders import Encoders
                 _encoders = Encoders()
             else:
                 _encoders = sim.SimEncoders()

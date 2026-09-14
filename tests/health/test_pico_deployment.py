@@ -52,9 +52,9 @@ class ADC:
 
 BOOT_CHECK = '''
 import sys
-import drive
+from hal import drive
 import main
-import setup
+from hal import setup
 
 assert setup.IS_HARDWARE, "the machine stub was not picked up"
 assert not [m for m in sys.modules if m == "sim" or m.startswith("sim.")], "sim/ was imported"
@@ -68,14 +68,21 @@ drive.drive_motors(0.55, 0.55)
 drive.stop_motors()
 drive.stop_trace()
 
-assert len(main.MODES) == 6, main.MODES
+assert len(main.MODES) == 5, main.MODES
 print("OK")
 '''
 
 
 def _build_deployment(directory):
+    """Copy the deployment set into `directory`, tree and all.
+
+    The set holds paths. Flattening brain/maze.py would boot a layout the board
+    will never have.
+    """
     for filename in DEPLOYMENT_SET:
-        shutil.copy(os.path.join(PACKAGE_DIR, filename), directory)
+        target = os.path.join(directory, filename)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copy(os.path.join(PACKAGE_DIR, filename), target)
     shutil.copy(os.path.join(PACKAGE_DIR, "routes", "lap3x3.mmc"),
                 os.path.join(directory, "route.mmc"))
     with open(os.path.join(directory, "machine.py"), "w") as handle:
@@ -96,10 +103,10 @@ def test_a_deployment_missing_drive_fails_loudly():
     """Proves the check above can actually fail."""
     with tempfile.TemporaryDirectory() as directory:
         _build_deployment(directory)
-        os.remove(os.path.join(directory, "drive.py"))
+        os.remove(os.path.join(directory, "hal", "drive.py"))
         result = subprocess.run([sys.executable, "-c", BOOT_CHECK],
                                 cwd=directory, capture_output=True, text=True)
-        assert result.returncode != 0, "a deployment with no drive.py appeared to boot"
+        assert result.returncode != 0, "a deployment with no hal/drive.py appeared to boot"
     print("✓ test_a_deployment_missing_drive_fails_loudly passed")
 
 

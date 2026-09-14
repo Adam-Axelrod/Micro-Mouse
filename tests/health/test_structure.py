@@ -18,26 +18,67 @@ if PACKAGE_DIR not in sys.path:
 
 import config
 
-# Copied to the board. CLAUDE.md and CHEATSHEET.md section 2 must agree with this.
+# Copied to the board. AGENTS.md and CHEATSHEET.md section 2 must agree with this.
+# Paths, not bare filenames: a package is only importable if its __init__.py
+# travels with it, and MicroPython has no namespace packages to paper over the
+# one that got left behind.
 DEPLOYMENT_SET = (
-    "main.py", "setup.py", "config.py", "drive.py", "maze.py", "explorer.py",
-    "exploration.py", "speed_run.py", "search_algorithms.py", "commands.py",
-    "motor_log.py", "max_speed_test.py", "diagnostic_encoders.py",
+    "main.py", "config.py", "files.py", "motion.py", "world.py",
+    "hal/__init__.py", "hal/setup.py", "hal/drive.py", "hal/clock.py",
+    "hal/diagnostic_encoders.py",
+    "record/__init__.py", "record/motor_log.py", "record/lap_log.py",
+    "brain/__init__.py", "brain/maze.py", "brain/explorer.py",
+    "brain/search_algorithms.py", "brain/commands.py",
+    "modes/__init__.py", "modes/exploration.py", "modes/speed_run.py",
+    "modes/follow_route.py", "modes/max_speed_test.py",
 )
 
+# First-party packages that DO go on the board, unlike sim/.
+LOCAL_PACKAGES = ("brain", "hal", "modes", "record")
+
+# Which package may import what. `config` and the MicroPython builtins are always
+# allowed; everything else must be listed. This is how a directory earns its
+# place: it encodes a rule that can fail, instead of sorting files by topic.
+# Root modules every layer may read, because none of them is a layer's business:
+# `config` is the numbers, `files` is os.stat without os.path.
+ALWAYS_ALLOWED = ("config", "files")
+
+LAYERS = {
+    "brain": {"brain"},          # AGENTS.md invariant 2: the brain stays pure.
+    "hal": {"hal", "record", "sim"},   # the board, and what it writes down.
+    "record": {"hal", "record"},       # an instrument reads the clock, nothing more.
+    # D-016 as a test: `modes` is absent from this set, so no mode may import
+    # another mode. A mode that wants a driver takes `hal.drive`, and a mode
+    # that wants the executor takes `motion`.
+    "modes": {"brain", "hal", "motion", "record", "sim", "world"},
+}
+
 # Imported lazily, so it may sit outside the deployment set without breaking boot.
-OPTIONAL_ON_HARDWARE = ("bench_test.py",)
+OPTIONAL_ON_HARDWARE = ("modes/bench_test.py",)
 
 PICO_ONLY_BUILTINS = ("os", "sys", "time", "math", "gc", "array", "machine", "rp2", "utime")
 
 # Imports MicroPython's `machine`/`rp2` directly, so it cannot load on a PC.
 # setup.get_encoders() imports it lazily, on first use, for exactly this reason.
-PICO_ONLY_MODULES = ("diagnostic_encoders",)
+PICO_ONLY_MODULES = ("hal.diagnostic_encoders", "modes.bench_test")
 
 
-def _root_modules():
-    return sorted(f for f in os.listdir(PACKAGE_DIR)
-                  if f.endswith(".py") and not f.startswith("_"))
+def _local_modules():
+    """Every first-party module, as a path relative to PACKAGE_DIR."""
+    paths = [f for f in os.listdir(PACKAGE_DIR)
+             if f.endswith(".py") and not f.startswith("_")]
+    for package in LOCAL_PACKAGES:
+        paths += [package + "/" + f
+                  for f in os.listdir(os.path.join(PACKAGE_DIR, package))
+                  if f.endswith(".py") and not f.startswith("_")]
+    return sorted(paths)
+
+
+def _module_name(path):
+    """"brain/maze.py" -> "brain.maze"; "brain/__init__.py" -> "brain"."""
+    if path.endswith("/__init__.py"):
+        return path[:-len("/__init__.py")]
+    return path[:-3].replace("/", ".")
 
 
 def _tree(path):
@@ -45,25 +86,37 @@ def _tree(path):
         return ast.parse(handle.read(), filename=path)
 
 
-def _toplevel_imports(path):
-    """Module names imported at module scope, ignoring imports inside functions."""
-    names = set()
-    for node in _tree(path).body:
+def _import_bindings(path):
+    """{local name: dotted target} for every import at module scope.
+
+    `from brain import maze` binds the name `maze` to the module `brain.maze`, so
+    name and module have to be tracked apart. try/except imports count.
+    """
+    bindings = {}
+
+    def add(node):
         if isinstance(node, ast.Import):
-            names.update(alias.name.split(".")[0] for alias in node.names)
+            for alias in node.names:
+                bindings[alias.asname or alias.name.split(".")[0]] = alias.name
         elif isinstance(node, ast.ImportFrom) and node.module:
-            names.add(node.module.split(".")[0])
-        elif isinstance(node, ast.Try):
+            for alias in node.names:
+                bindings[alias.asname or alias.name] = node.module + "." + alias.name
+
+    for node in _tree(path).body:
+        add(node)
+        if isinstance(node, ast.Try):
             for inner in node.body + [n for handler in node.handlers for n in handler.body]:
-                if isinstance(inner, ast.Import):
-                    names.update(alias.name.split(".")[0] for alias in inner.names)
-                elif isinstance(inner, ast.ImportFrom) and inner.module:
-                    names.add(inner.module.split(".")[0])
-    return names
+                add(inner)
+    return bindings
+
+
+def _toplevel_imports(path):
+    """Top-level module names imported at module scope: "brain" for brain.maze."""
+    return {dotted.split(".")[0] for dotted in _import_bindings(path).values()}
 
 
 def _attribute_calls(path):
-    """(module, attribute) pairs for every `module.attr` reference in the file."""
+    """(name, attribute) pairs for every `name.attr` reference in the file."""
     pairs = set()
     for node in ast.walk(_tree(path)):
         if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
@@ -78,7 +131,8 @@ def _sim_modules():
 
 
 def test_every_module_imports():
-    importable = [f[:-3] for f in _root_modules() if f[:-3] not in PICO_ONLY_MODULES]
+    importable = [_module_name(p) for p in _local_modules()]
+    importable = [m for m in importable if m not in PICO_ONLY_MODULES]
     failures = []
     for module in importable + _sim_modules():
         result = subprocess.run([sys.executable, "-c", "import " + module],
@@ -86,7 +140,7 @@ def test_every_module_imports():
         if result.returncode and "No module named 'pygame'" not in result.stderr:
             failures.append((module, result.stderr.strip().split("\n")[-1]))
     assert not failures, failures
-    print("✓ test_every_module_imports passed")
+    print("\u2713 test_every_module_imports passed")
 
 
 def test_cross_module_calls_resolve():
@@ -96,65 +150,165 @@ def test_cross_module_calls_resolve():
     """
     import importlib
 
-    local_modules = {f[:-3] for f in _root_modules()} - set(PICO_ONLY_MODULES)
+    local = {_module_name(p) for p in _local_modules()} - set(PICO_ONLY_MODULES)
     failures = []
-    for path in sorted(local_modules - {"main"}):
-        imported = _toplevel_imports(path + ".py") & local_modules
-        for module_name, attribute in sorted(_attribute_calls(path + ".py")):
-            if module_name not in imported:
+    for path in _local_modules():
+        if _module_name(path) == "main":
+            continue
+        bindings = {name: dotted for name, dotted in _import_bindings(path).items()
+                    if dotted in local}
+        for name, attribute in sorted(_attribute_calls(path)):
+            if name not in bindings:
                 continue
-            module = importlib.import_module(module_name)
+            module = importlib.import_module(bindings[name])
             if not hasattr(module, attribute):
-                failures.append("{}.py calls {}.{}, which does not exist".format(
-                    path, module_name, attribute))
+                failures.append("{} calls {}.{}, which does not exist".format(
+                    path, name, attribute))
     assert not failures, failures
-    print("✓ test_cross_module_calls_resolve passed")
+    print("\u2713 test_cross_module_calls_resolve passed")
+
+
+def _bound_names(path):
+    """Every name the file binds locally: assignments, parameters, loops, with, except.
+
+    Anything here shadows a module name legitimately -- `to_ascii(maze, ...)`
+    takes a parameter called `maze`, and that is not a missing import.
+    """
+    names = set()
+    for node in ast.walk(_tree(path)):
+        # A LAZY import inside a function binds the name too. `main.run_bench`
+        # and `setup.get_encoders` both import this way on purpose.
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                names.add(alias.asname or alias.name)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            names.add(node.id)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            names.add(node.name)
+            args = node.args
+            for arg in args.posonlyargs + args.args + args.kwonlyargs:
+                names.add(arg.arg)
+            for arg in (args.vararg, args.kwarg):
+                if arg is not None:
+                    names.add(arg.arg)
+        elif isinstance(node, ast.ClassDef):
+            names.add(node.name)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            names.add(node.name)
+        elif isinstance(node, ast.Global):
+            names.update(node.names)
+    return names
+
+
+def test_a_module_reference_is_actually_imported():
+    """`files.file_exists(...)` with no `import files` above it.
+
+    CI caught this on 2026-09-14 and the suite did not: the NameError was inside
+    a function only `__main__` calls, so importing the module proved nothing.
+    A reference to a first-party module name that the file neither imports nor
+    binds is a missing import, and it fails at RUN time, not at import time.
+    """
+    module_names = {_module_name(p).split(".")[-1] for p in _local_modules()}
+    module_names |= {_module_name(p) for p in _local_modules() if "/" not in p}
+    module_names |= {p.split("/")[-1][:-3] for p in _sim_modules()}
+    module_names |= set(LOCAL_PACKAGES)
+
+    failures = []
+    for path in _local_modules() + [p.replace(".", "/") + ".py" for p in _sim_modules()]:
+        available = set(_import_bindings(path)) | _bound_names(path)
+        for name, attribute in sorted(_attribute_calls(path)):
+            if name in module_names and name not in available:
+                failures.append("{} calls {}.{} but never imports {}".format(
+                    path, name, attribute, name))
+    assert not failures, failures
+    print("\u2713 test_a_module_reference_is_actually_imported passed")
+
+
+def test_the_layers_hold():
+    """AGENTS.md invariant 2, as a test instead of a review.
+
+    Add a package to LAYERS when you create one, or the directory means nothing.
+    """
+    failures = []
+    for path in _local_modules():
+        package = path.split("/")[0] if "/" in path else ""
+        if package not in LAYERS:
+            continue
+        for dotted in sorted(_import_bindings(path).values()):
+            name = dotted.split(".")[0]
+            if name in ALWAYS_ALLOWED or name in PICO_ONLY_BUILTINS or name in LAYERS[package]:
+                continue
+            failures.append("{} imports {}, which {}/ may not reach".format(
+                path, dotted, package))
+    assert not failures, failures
+    print("\u2713 test_the_layers_hold passed")
+
+
+def test_every_package_ships_its_init():
+    """Static, because no runtime check on the PC can catch it.
+
+    PEP 420 means `brain/` imports fine here without one. MicroPython has no
+    namespace packages, so the same tree fails at boot on the board.
+    """
+    for package in LOCAL_PACKAGES:
+        init = package + "/__init__.py"
+        assert os.path.exists(os.path.join(PACKAGE_DIR, init)), init
+        assert init in DEPLOYMENT_SET, "{} is not in the deployment set".format(init)
+    print("\u2713 test_every_package_ships_its_init passed")
 
 
 def test_the_deployment_set_exists():
-    missing = [f for f in DEPLOYMENT_SET if not os.path.exists(os.path.join(PACKAGE_DIR, f))]
+    missing = [f for f in DEPLOYMENT_SET
+               if not os.path.exists(os.path.join(PACKAGE_DIR, f))]
     assert not missing, missing
-    print("✓ test_the_deployment_set_exists passed")
+    print("\u2713 test_the_deployment_set_exists passed")
 
 
 def test_the_deployment_set_is_closed_under_imports():
     """Nothing on the board may import a module that is not on the board."""
-    deployed = {f[:-3] for f in DEPLOYMENT_SET}
-    optional = {f[:-3] for f in OPTIONAL_ON_HARDWARE}
+    deployed = {_module_name(f) for f in DEPLOYMENT_SET}
+    optional = {_module_name(f) for f in OPTIONAL_ON_HARDWARE}
     failures = []
     for path in DEPLOYMENT_SET:
-        for name in _toplevel_imports(path):
-            if name in deployed or name in PICO_ONLY_BUILTINS or name in optional:
+        for dotted in sorted(_import_bindings(path).values()):
+            name = dotted.split(".")[0]
+            if name in PICO_ONLY_BUILTINS or name == "sim":
+                continue  # sim is guarded by try/except; absent on the board by design
+            if dotted in deployed or dotted in optional:
                 continue
-            if name == "sim":
-                continue  # guarded by try/except; absent on the board by design
-            failures.append("{} imports {}, which is not deployed".format(path, name))
+            # `from brain.maze import MazeStructure` binds a symbol, not a module.
+            if dotted.rsplit(".", 1)[0] in deployed:
+                continue
+            failures.append("{} imports {}, which is not deployed".format(path, dotted))
     assert not failures, failures
-    print("✓ test_the_deployment_set_is_closed_under_imports passed")
+    print("\u2713 test_the_deployment_set_is_closed_under_imports passed")
 
 
 def test_bench_test_is_not_imported_at_module_scope():
     """It is 914 lines and not deployed, so a module-scope import fails at boot."""
     assert "bench_test" not in _toplevel_imports("main.py")
-    print("✓ test_bench_test_is_not_imported_at_module_scope passed")
+    print("\u2713 test_bench_test_is_not_imported_at_module_scope passed")
 
 
 def test_pygame_stays_inside_sim():
-    offenders = [p for p in _root_modules() if "pygame" in _toplevel_imports(p)]
+    offenders = [p for p in _local_modules() if "pygame" in _toplevel_imports(p)]
     assert not offenders, offenders
-    print("✓ test_pygame_stays_inside_sim passed")
+    print("\u2713 test_pygame_stays_inside_sim passed")
 
 
 def test_only_setup_probes_the_platform():
     """Every other module must take its hardware handles from setup."""
     offenders = []
-    for path in _root_modules():
-        if path in ("setup.py", "diagnostic_encoders.py"):
+    for path in _local_modules():
+        if path in ("hal/setup.py", "hal/diagnostic_encoders.py", "modes/bench_test.py"):
             continue
         if "machine" in _toplevel_imports(path):
             offenders.append(path)
     assert not offenders, offenders
-    print("✓ test_only_setup_probes_the_platform passed")
+    print("\u2713 test_only_setup_probes_the_platform passed")
 
 
 def test_documented_paths_point_somewhere_real():
@@ -164,8 +318,8 @@ def test_documented_paths_point_somewhere_real():
 
 
 def test_committed_fixtures_parse():
-    import commands
-    import maze
+    from brain import commands
+    from brain import maze
     for directory, reader in ((config.MAZES_DIR, maze.num_file_import),
                               (config.ROUTES_DIR, commands.read_command_file)):
         for root, _dirs, files in os.walk(directory):
@@ -179,14 +333,51 @@ def test_working_files_are_not_tracked():
     """belief.num and route.mmc are run artefacts, not fixtures."""
     tracked = subprocess.run(["git", "ls-files"], cwd=PACKAGE_DIR,
                              capture_output=True, text=True).stdout.split("\n")
-    for artefact in ("belief.num", "route.mmc", "motor_log.csv"):
+    for artefact in ("belief.num", "route.mmc", "motor_log.csv", "lap_soak.csv"):
         assert artefact not in tracked, artefact
     print("✓ test_working_files_are_not_tracked passed")
+
+
+def test_constants_md_names_every_constant():
+    """config.py says what a number is; CONSTANTS.md says how far to trust it.
+
+    Fails when config.py gains a constant the document does not name.
+    """
+    with open(os.path.join(PACKAGE_DIR, "config.py")) as handle:
+        source = handle.read()
+    with open(os.path.join(PACKAGE_DIR, "CONSTANTS.md")) as handle:
+        document = handle.read()
+    declared = []
+    for node in ast.parse(source).body:
+        targets = node.targets if isinstance(node, ast.Assign) else []
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id.isupper():
+                declared.append(target.id)
+        if isinstance(node, ast.Try):
+            for inner in node.body + [n for h in node.handlers for n in h.body]:
+                for target in getattr(inner, "targets", []):
+                    if isinstance(target, ast.Name) and target.id.isupper():
+                        declared.append(target.id)
+    missing = sorted({name for name in declared if name not in document})
+    assert not missing, "CONSTANTS.md does not mention: " + ", ".join(missing)
+    print("\u2713 test_constants_md_names_every_constant passed")
+
+
+def test_the_cheatsheet_names_every_deployed_file():
+    """The operator copies the list in CHEATSHEET.md section 2, not DEPLOYMENT_SET."""
+    with open(os.path.join(PACKAGE_DIR, "CHEATSHEET.md")) as handle:
+        text = handle.read()
+    missing = [name for name in DEPLOYMENT_SET if name not in text]
+    assert not missing, missing
+    print("✓ test_the_cheatsheet_names_every_deployed_file passed")
 
 
 TESTS = (
     test_every_module_imports,
     test_cross_module_calls_resolve,
+    test_a_module_reference_is_actually_imported,
+    test_the_layers_hold,
+    test_every_package_ships_its_init,
     test_the_deployment_set_exists,
     test_the_deployment_set_is_closed_under_imports,
     test_bench_test_is_not_imported_at_module_scope,
@@ -195,6 +386,8 @@ TESTS = (
     test_documented_paths_point_somewhere_real,
     test_committed_fixtures_parse,
     test_working_files_are_not_tracked,
+    test_constants_md_names_every_constant,
+    test_the_cheatsheet_names_every_deployed_file,
 )
 
 

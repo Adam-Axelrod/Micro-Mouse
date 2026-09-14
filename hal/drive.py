@@ -1,7 +1,7 @@
 """The motor boundary: the one way anything in this project moves a wheel.
 
 Every mode drives through `drive_motors(left, right)` with signed power in
-[-1.0, 1.0]. That pair is the robot-boundary contract value (CLAUDE.md invariant
+[-1.0, 1.0]. That pair is the robot-boundary contract value (AGENTS.md invariant
 1), not a duty count, so it stays meaningful if the PWM encoding or the pin map
 changes underneath it.
 
@@ -11,15 +11,17 @@ other modules -- `max_speed_test`, `bench_test`, `exploration` and the PC-only
 a *driver* is what left `bench_test` and `replay_log` calling
 `main.drive_motors` after the functions had moved.
 
-Pico-portable: `math`, `time`, `config`, `setup`, `motor_log` only.
+Durations are NOT computed here. `motion.py` turns a distance or an angle into
+a number of seconds; this module holds a power for however long it is told to.
+
+Pico-portable: `time`, `config`, `setup`, `motor_log` only.
 """
 
-import math
 import time
 
 import config
-import motor_log
-import setup
+from record import motor_log
+from hal import setup
 
 HAS_SIM = setup.sim is not None
 
@@ -136,18 +138,18 @@ def run_motion_for(duration_seconds, render_object=None, belief=None, route=None
         setup.sim.step_sim_physics(remainder)
 
 
-def pivot_in_place(quarter_turns, clockwise=True, render_object=None, belief=None, route=None):
-    """Spin on the spot through `quarter_turns` x 90 degrees.
+def pivot_for(seconds, clockwise=True, render_object=None, belief=None,
+              route=None, power=None):
+    """Spin on the spot for `seconds` at `power`. Actuation only.
 
-    The power is FIXED at TURN_DUTY_POWER and only the duration scales with the
-    angle. Scaling both is what made a U-turn rotate 360 degrees: it drove at
-    2 x TURN_DUTY_POWER, so it spun twice as fast for the time a 180 needed at
-    the base rate. Corrected 2026-08-31.
+    The DURATION is computed by `motion.py`, which is the one place a distance
+    or an angle becomes a time. This function does not know what angle it is
+    turning through, and that is deliberate: the arithmetic closed-loop control
+    deletes lives in one module, not in the driver.
     """
-    pivot_rate_rads = 2.0 * TURN_DUTY_POWER * config.MAX_WHEEL_SPEED_MMS / config.TRACK_WIDTH_MM
-    pivot_time_seconds = (math.pi / 2.0) * quarter_turns / pivot_rate_rads
-
+    if power is None:
+        power = TURN_DUTY_POWER
     sign = 1.0 if clockwise else -1.0
-    drive_motors(sign * TURN_DUTY_POWER, -sign * TURN_DUTY_POWER)
-    run_motion_for(pivot_time_seconds, render_object, belief, route)
+    drive_motors(sign * power, -sign * power)
+    run_motion_for(seconds, render_object, belief, route)
     stop_motors()
