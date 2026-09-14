@@ -36,7 +36,7 @@ brain/__init__.py brain/maze.py brain/explorer.py brain/search_algorithms.py
 brain/commands.py
 modes/__init__.py modes/exploration.py modes/speed_run.py
 modes/follow_route.py modes/max_speed_test.py
-                                  +  belief.num  +  route.mmc
+                            +  runs/belief.num  +  runs/route.mmc
 ```
 
 **`hal/`, `record/`, `brain/` and `modes/` are directories and must arrive as
@@ -52,7 +52,7 @@ another. `config.py` and `files.py` stay at root because every layer reads them
 and neither is a layer's business.
 
 `hal/diagnostic_encoders.py` is now part of the base set: `hal/setup.py` loads
-it on first encoder read. `route.mmc` is what mode 5 drives, so copy the route
+it on first encoder read. `runs/route.mmc` is what mode 5 drives, so copy the route
 you mean to run: the board has no editor. Add for hardware work: `modes/bench_test.py` — `main.py` imports
 it lazily, so the set above boots without it.
 
@@ -68,7 +68,9 @@ mpremote mkdir :hal
 mpremote mkdir :record
 mpremote mkdir :brain
 mpremote mkdir :modes
-mpremote cp main.py config.py files.py motion.py world.py belief.num route.mmc :
+mpremote mkdir :runs
+mpremote cp main.py config.py files.py motion.py world.py :
+mpremote cp runs/belief.num runs/route.mmc :runs/
 mpremote cp hal/__init__.py hal/setup.py hal/drive.py hal/clock.py hal/diagnostic_encoders.py :hal/
 mpremote cp record/__init__.py record/motor_log.py record/lap_log.py :record/
 mpremote cp brain/__init__.py brain/maze.py brain/explorer.py brain/search_algorithms.py brain/commands.py :brain/
@@ -76,7 +78,9 @@ mpremote cp modes/__init__.py modes/exploration.py modes/speed_run.py modes/foll
 ```
 
 `mpremote mkdir` fails if the directory already exists, which is harmless: run
-the five `cp` lines after it either way.
+the `cp` lines after it either way. `runs/` is where the robot writes, so a run
+creates it even if you skip that `mkdir`: `files.ensure_dir` makes it on the
+first write.
 
 ```bash
 mpremote repl
@@ -166,11 +170,11 @@ SW2 will start.
 
 | Mode | LED blinks | What it does |
 |---|---|---|
-| 1 | 1 | Explorer — updates the belief, writes `belief.num` |
-| 2 | 2 | Speed run — loads `belief.num`, flood-fills, drives it |
+| 1 | 1 | Explorer — updates the belief, writes `runs/belief.num` |
+| 2 | 2 | Speed run — loads `runs/belief.num`, flood-fills, drives it |
 | 3 | 3 | Bench test — the BT-0..BT-8 bring-up checks |
 | 4 | 4 | Max speed test — one 5.2 m dash at full duty (§5.1) |
-| 5 | 5 | Follow route — drive `route.mmc` verbatim, N laps (§5.3); the soak is this mode with the soak preset (§5.2) |
+| 5 | 5 | Follow route — drive `runs/route.mmc` verbatim, N laps (§5.3); the soak is this mode with the soak preset (§5.2) |
 
 Boot lands on mode 1 and blinks once. Each SW1 press steps to the next mode and
 blinks its number. To reach mode 4 from boot, press SW1 three times and count
@@ -182,10 +186,10 @@ mode 5's path and differed only in its defaults, so it is now `soak=True`
 `FOLLOW_ROUTE_LAPS` laps at cruise duty.
 
 > Exploration has **no hardware path today** — `read_walls` reads
-> `groundtruth.num` (not deployed to the Pico) and returns all four sides. On
-> hardware, use speed run with a hand-authored `belief.num`.
+> `mazes/groundtruth.num` (not deployed to the Pico) and returns all four sides.
+> On hardware, use speed run with a hand-authored `runs/belief.num`.
 
-Every Pico run traces commanded motor powers to `motor_log.csv` automatically:
+Every Pico run traces commanded motor powers to `runs/motor_log.csv` automatically:
 `main.py` opens the trace before dispatching a mode and closes it after. Starting
 a mode straight from the REPL bypasses `main`, so `max_speed_test.run()` and
 `follow_route.run()` open the trace themselves. Anything else run by hand needs
@@ -199,7 +203,7 @@ python3 main.py --render   # with pygame
 python3 main.py --step     # mode 1, exploration
 python3 main.py --bench    # mode 3, bench test (Pico only)
 python3 main.py --maxspeed # mode 4, max speed test
-python3 main.py --follow    # mode 5, one lap of route.mmc
+python3 main.py --follow    # mode 5, one lap of runs/route.mmc
 python3 main.py --soak      # mode 5 with the soak preset: 30 logged laps
 python3 main.py --soak --laps=5 --power=0.3   # shorter and slower
 python3 main.py --log      # also write a motor trace (automatic on hardware)
@@ -277,10 +281,10 @@ not. The dash and the stopwatch work regardless; the mode says so and carries on
 Cross-check the speed against where the nose stopped. Short of the 5.2 m mark
 means `MAX_WHEEL_SPEED_MMS` is too high; past it, too low.
 
-Each run appends a row to `max_speed_test.csv` on the Pico
+Each run appends a row to `runs/max_speed_test.csv` on the Pico
 (`power,assumed_speed_mms,target_distance_mm,commanded_s,measured_s,left_ticks,right_ticks`),
 and `calibrate()` appends its results as a comment beneath. Copy it off with
-`mpremote cp :max_speed_test.csv .`.
+`mpremote cp :runs/max_speed_test.csv .`.
 
 From the REPL you can vary the dash without re-flashing:
 
@@ -302,7 +306,7 @@ target. That checks the arithmetic and says nothing about the chassis.
 
 ### 5.3 Follow route (mode 5)
 
-Drives `route.mmc` exactly as written, with no planning. Nothing about the
+Drives `runs/route.mmc` exactly as written, with no planning. Nothing about the
 planner is involved, so a route driven wrongly is the drive layer's fault.
 
 Draw one on the PC, then copy it over:
@@ -311,7 +315,7 @@ Draw one on the PC, then copy it over:
 python3 sim/route_editor.py                    # 3x3 blank grid, the physical maze
 python3 sim/route_editor.py --size 16x16       # any grid, no maze file needed
 python3 sim/route_editor.py mazes/test_mazes/blank3x3.num   # walls from a file
-mpremote cp route.mmc :
+mpremote cp runs/route.mmc :runs/
 ```
 
 Click cells to build the route, `r` to rotate the start heading, `s` to save.
@@ -349,7 +353,7 @@ perimeter plus the centre cell, all nine cells of a 3x3).
 
 ### 5.2 Lap soak (mode 5, `--soak`)
 
-Thirty laps of the route in `route.mmc`, logged lap by lap. A 3x3 perimeter lap is
+Thirty laps of the route in `runs/route.mmc`, logged lap by lap. A 3x3 perimeter lap is
 about 0.72 m of driving, so thirty laps is ~22 m and turns a per-move bias too
 small to see into an offset the tape reads off the floor. Unlike the sprint it
 replaced, a lap cannot cancel its own error: the turns accumulate too.
@@ -360,7 +364,7 @@ either button between laps to abort.
 
 **Before starting:**
 
-1. Copy the route you mean to drive into `route.mmc`, or draw one (§5.3).
+1. Copy the route you mean to drive into `runs/route.mmc`, or draw one (§5.3).
 2. Place the robot at the **CENTRE** of the start cell the route names, not back
    against a wall. A half-cell offset at the start is a half-cell error for the
    whole run.
@@ -369,7 +373,7 @@ either button between laps to abort.
 
 ```python
 from modes import follow_route
-follow_route.run(soak=True)                  # the default 30 laps of route.mmc
+follow_route.run(soak=True)                  # the default 30 laps of runs/route.mmc
 follow_route.run(soak=True, laps=5)          # a shorter first go
 follow_route.run(soak=True, power=0.30)      # slower still
 follow_route.run(soak=True, route_path="routes/lap3x3_via_centre.mmc")
@@ -399,7 +403,7 @@ What to look for in the report:
 | `ENCODER DROPOUT` on a lap | the intermittent channel. This is the fault a soak run exists to catch |
 | Offset from the start mark | the one thing only the tape can tell you |
 
-Every lap appends a row to `lap_soak.csv`:
+Every lap appends a row to `runs/lap_soak.csv`:
 
 ```
 lap,elapsed_s,left_ticks,right_ticks,d_left,d_right,turn_residual_deg,
@@ -418,9 +422,9 @@ kept, because lit alone cannot tell a wall from the room lights changing.
 
 ## 6. Getting files off the Pico
 
-The robot writes `motor_log.csv`, `max_speed_test.csv` and `lap_soak.csv` to its own
-filesystem. On the Pico `config.PACKAGE_DIR` is empty, so everything sits at the
-root and the remote path is just `:name.csv`.
+The robot writes `motor_log.csv`, `max_speed_test.csv` and `lap_soak.csv` into
+`runs/` on its own filesystem, the same directory they land in on the PC. On the
+Pico `config.PACKAGE_DIR` is empty, so the remote path is just `:runs/name.csv`.
 
 ### With the VS Code extension (MicroPico 4.3.4)
 
@@ -449,16 +453,17 @@ an empty folder or not at all.
 ```bash
 mpremote devs                                   # which port the board is on
 mpremote fs ls                                  # what it has written
-mpremote cat :max_speed_test.csv                # read it without copying
-mpremote cp :max_speed_test.csv .               # pull one file
-mpremote cp :max_speed_test.csv :motor_log.csv .  # several at once
-mpremote rm :max_speed_test.csv                 # start a fresh baseline
+mpremote fs ls :runs                            # what a run has written
+mpremote cat :runs/max_speed_test.csv           # read it without copying
+mpremote cp :runs/max_speed_test.csv .          # pull one file
+mpremote cp :runs/max_speed_test.csv :runs/motor_log.csv .  # several at once
+mpremote rm :runs/max_speed_test.csv            # start a fresh baseline
 ```
 
 Keep runs from overwriting each other by pulling into a dated folder:
 
 ```bash
-mkdir -p runs/$(date +%F) && mpremote cp :max_speed_test.csv runs/$(date +%F)/
+mkdir -p runs/$(date +%F) && mpremote cp :runs/max_speed_test.csv runs/$(date +%F)/
 ```
 
 Four things that actually go wrong:
@@ -488,7 +493,7 @@ where the replay ends and where the robot physically stopped **is the
 measurement** of how wrong the motor model is — that is the tool's purpose.
 
 ```bash
-mpremote cp :motor_log.csv .
+mpremote cp :runs/motor_log.csv runs/
 python3 replay_log.py --render
 ```
 
@@ -498,11 +503,11 @@ python3 replay_log.py --render
 
 `.num` format: one line per cell, `x y n e s w` (1 = wall).
 
-- `groundtruth.num` — sim truth, PC only, never deployed
-- `belief.num` — what the robot thinks; **speed run reads this**
+- `mazes/groundtruth.num` — sim truth, PC only, never deployed
+- `runs/belief.num` — what the robot thinks; **speed run reads this**
 
-`belief.num` must exist on the Pico. If it is missing, the planner falls back
-to `groundtruth.num`, which is not deployed — so the run dies with a
+`runs/belief.num` must exist on the Pico. If it is missing, the planner falls
+back to `mazes/groundtruth.num`, which is not deployed — so the run dies with a
 `FileNotFoundError`.
 
 ### Making a blank N×N maze
@@ -510,8 +515,8 @@ to `groundtruth.num`, which is not deployed — so the run dies with a
 Maze size is read from the file, so any size works. The goal is
 `(cols//2 - 1, rows//2 - 1)` — for 6×6 that is cell `(2, 2)`.
 
-Write it under its own name — do **not** overwrite the repo's 16×16
-`belief.num`:
+Write it into `mazes/` under its own name. `runs/belief.num` is a working
+file, not a fixture, so nothing you want to keep belongs there:
 
 ```bash
 python3 -c "import maze; m = maze.MazeStructure(cols=6, rows=6); maze.num_file_export('mazes/blank6x6.num', m.cells); print(m)"
@@ -523,10 +528,10 @@ Verify the planned route before driving it:
 python3 -c "import maze, config, search_algorithms, commands; c,x,y = maze.num_file_import('mazes/blank6x6.num'); m = maze.MazeStructure(cells=c, cols=x, rows=y); r = search_algorithms.flood_fill(m, config.START_POS); print(r); print(commands.path_to_commands(r))"
 ```
 
-Then deploy it *as* `belief.num`, which is the name speed run reads:
+Then deploy it *as* `runs/belief.num`, which is the name speed run reads:
 
 ```bash
-mpremote cp mazes/blank6x6.num :belief.num
+mpremote cp mazes/blank6x6.num :runs/belief.num
 ```
 
 A blank 6×6 gives `[(0,0),(0,1),(0,2),(1,2),(2,2)]` → `['F 2', 'R', 'F 2', 'H']`.

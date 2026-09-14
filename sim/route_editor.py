@@ -5,12 +5,12 @@ every test of the motion layer a test of the planner as well. This tool separate
 them: click the cells you want, save, and drive that file. Nothing about the
 planner is involved, so a route that is driven wrongly is the drive layer's fault.
 
-    python3 sim/route_editor.py                      # 3x3 blank grid -> route.mmc
+    python3 sim/route_editor.py                      # 3x3 blank grid -> runs/route.mmc
     python3 sim/route_editor.py --size 16x16         # any grid, no maze file needed
     python3 sim/route_editor.py mazes/test_mazes/blank3x3.num   # walls from a file
     python3 sim/route_editor.py --out routes/hairpin.mmc        # save a fixture
 
-Saving with no --out writes `route.mmc` at the package root: the working file the
+Saving with no --out writes `runs/route.mmc`: the working file the
 robot carries, so `python3 main.py --follow` drives what you just drew. `routes/`
 holds fixtures worth keeping.
 

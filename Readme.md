@@ -89,10 +89,10 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 
 1. **Mode 1: Exploration Mode (`--step` / `--explorer`)** -- *simulation only*:
    * Mouse explores the maze cell-by-cell using flood-fill (`brain/search_algorithms.py`).
-   * Updates its `belief_map`, then exports the discovered layout to `belief.num`.
-   * **It does not use a sensor.** `read_walls()` reads `groundtruth.num` directly. The simulated reflective sensors exist (`sim/mouse.py`, `sim/geometry.py`) but nothing yet converts an ADC reading into a sensed side, so this mode has no hardware path. It also never calls `drive_motors`, so the simulated body does not move -- only the logical `Explorer` advances.
+   * Updates its `belief_map`, then exports the discovered layout to `runs/belief.num`.
+   * **It does not use a sensor.** `read_walls()` reads `mazes/groundtruth.num` directly. The simulated reflective sensors exist (`sim/mouse.py`, `sim/geometry.py`) but nothing yet converts an ADC reading into a sensed side, so this mode has no hardware path. It also never calls `drive_motors`, so the simulated body does not move -- only the logical `Explorer` advances.
 2. **Mode 2: Speed Run Mode (`--speed`)**:
-   * Loads the saved grid map (`belief.num`) or `groundtruth.num`.
+   * Loads the saved grid map (`runs/belief.num`) or `mazes/groundtruth.num`.
    * Calculates the optimal shortest path using flood fill.
    * Translates the path into egocentric verbs (`F n`, `L`, `R`, `U`, `H`) via `brain/commands.py`.
    * Drives the mouse through the movement sequence.
@@ -106,7 +106,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
    * Drives a hand-authored `.mmc` verbatim, so the planner is not a suspect if the robot ends up in the wrong place. `--route=`, `--map=` and `--laps=` select the file, the world and the lap count.
 
    **The lap soak (`--soak`) is this mode with a preset**, not a mode of its own: it was the same code down the same path and could only differ in its defaults.
-   * Drives the route in `route.mmc` 30 times at a gentler duty than a speed run (0.40), and appends one row per lap to `lap_soak.csv`.
+   * Drives the route in `runs/route.mmc` 30 times at a gentler duty than a speed run (0.40), and appends one row per lap to `runs/lap_soak.csv`.
    * Each row carries the ticks, the per-lap tick deltas, the heading residual against what the route commanded, and both halves of each light sensor reading. The light columns are for the wall-distance work still to come: the same pose read thirty times says how repeatable the sensors are.
    * Refuses more than one lap of a route that does not return to its start **cell and heading**, because lap 2 would set off from the wrong square. `commands.walk_route` vets it before the motors arm.
    * `--retrace` closes an open route instead: a U-turn, the path walked backwards, a U-turn home. It cancels its own symmetric error (equal shortfall each way, right turns becoming left turns), so it measures the pivot above all -- `commands.with_return_leg` says so at the call site.
@@ -137,8 +137,9 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`hal/clock.py`** | Which clock a timed run uses. The Pico sleeps and its wall clock is real; the PC steps physics and only the sim clock means anything. |
 | **`record/motor_log.py`** | Change-only CSV trace of commanded motor powers (format v1). Written on every hardware run, and on `--log` from the PC. |
 | **`hal/diagnostic_encoders.py`** | PIO quadrature encoder counter. Takes its pins from `hal/setup.py` and is reached through `setup.read_encoders()`, never imported directly. |
-| **`groundtruth.num`** | Default ground-truth maze fixture used by PC simulation. |
-| **`belief.num`** | Untracked working file (gitignored): the current map the robot drives. Written by mode 1; hand-authored file used by mode 2 on hardware. Not committed; fixtures live under `mazes/`. |
+| **`mazes/groundtruth.num`** | Default ground-truth maze fixture used by PC simulation. |
+| **`runs/`** | Everything a run writes, on both targets: the logs, plus the working `belief.num` and `route.mmc`. Gitignored. The package root holds source and committed fixtures only. |
+| **`runs/belief.num`** | Untracked working file: the current map the robot drives. Written by mode 1; hand-authored file used by mode 2 on hardware. Not committed; fixtures live under `mazes/`. |
 
 ### PC-only (`sim/`) -- never deployed to the Pico
 
@@ -148,7 +149,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`sim/mouse.py`** | `MouseState` continuous pose integration (exact-arc differential drive), encoder tick accumulation, and the phototransistor ADC model. |
 | **`sim/geometry.py`** | `MazeGeometry` mm-space wall segments and post polygons, and the `cast_ray()` engine. |
 | **`sim/renderer.py`** | Optional Pygame renderer, plus `make_renderer()` so no mode has to import another mode in order to draw. |
-| **`sim/replay_log.py`** | Re-drives the sim from a Pico `motor_log.csv`. The gap between the replayed pose and where the robot really stopped is the measurement. |
+| **`sim/replay_log.py`** | Re-drives the sim from a Pico `runs/motor_log.csv`. The gap between the replayed pose and where the robot really stopped is the measurement. |
 | **`sim/route_editor.py`** | Draw a route by clicking cells on any grid size; writes `.mmc` with the start pose and goal in its header. Refuses a step that is not adjacent or that crosses a wall. |
 
 ---

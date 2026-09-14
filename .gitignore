@@ -4,18 +4,11 @@ venv/
 __pycache__/
 *.pyc
 
-# Run artefacts, one per run, not source. Copy a Pico file in under its own name
-# if a particular run is worth keeping.
-motor_log.csv
-max_speed_test.csv
-max_speed_samples.csv
-lap_soak.csv
+# Everything a run writes, plus the working map and route currently loaded on
+# the robot. Committed fixtures live in mazes/ and routes/; copy a run out under
+# its own name if it is worth keeping.
+runs/
 .lavish/
-
-# Working files: the map and the route currently loaded on the robot.
-# Committed fixtures live in mazes/ and routes/.
-belief.num
-route.mmc
 
 # Agent worktrees and local tooling
 .claude/

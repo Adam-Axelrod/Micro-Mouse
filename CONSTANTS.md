@@ -171,15 +171,20 @@ Pico because `PACKAGE_DIR` is `""` there and MicroPython has no `os.path`.
 | Constant | File | Note |
 |---|---|---|
 | `PACKAGE_DIR` | — | `""` on the Pico, the repository root on the PC. |
-| `DEFAULT_MAZE` | `groundtruth.num` | Sim truth. Committed. |
-| `SAVED_BELIEF_MAZE` | `belief.num` | Run artefact. Gitignored and untracked. |
-| `SAVED_ROUTE` | `route.mmc` | Run artefact. Copy the fixture you mean to drive. |
+| `RUNS_DIR` | `runs/` | Everything a run writes. Gitignored. `files.ensure_dir` creates it. |
+| `DEFAULT_MAZE` | `mazes/groundtruth.num` | Sim truth. Committed. |
+| `SAVED_BELIEF_MAZE` | `runs/belief.num` | Run artefact. Gitignored and untracked. |
+| `SAVED_ROUTE` | `runs/route.mmc` | Run artefact. Copy the fixture you mean to drive. |
 | `MAZES_DIR` | `mazes/` | Committed fixtures. |
 | `ROUTES_DIR` | `routes/` | Committed fixtures. |
-| `MOTOR_LOG_PATH` | `motor_log.csv` | Run artefact. |
-| `MAX_SPEED_LOG_PATH` | `max_speed_test.csv` | Run artefact, appended per run. |
-| `MAX_SPEED_SAMPLE_LOG_PATH` | `max_speed_samples.csv` | Run artefact, appended per run. |
-| `SOAK_LOG_PATH` | `lap_soak.csv` | Run artefact, one row per lap. |
+| `MOTOR_LOG_PATH` | `runs/motor_log.csv` | Run artefact. |
+| `MAX_SPEED_LOG_PATH` | `runs/max_speed_test.csv` | Run artefact, appended per run. |
+| `MAX_SPEED_SAMPLE_LOG_PATH` | `runs/max_speed_samples.csv` | Run artefact, appended per run. |
+| `SOAK_LOG_PATH` | `runs/lap_soak.csv` | Run artefact, one row per lap. |
+
+The package root holds source and committed fixtures only. A run writes into
+`runs/` on BOTH targets, so the Pico's filesystem has the same shape as the
+repository and every `mpremote` path reads the same on either side.
 
 ## Render and editor
 

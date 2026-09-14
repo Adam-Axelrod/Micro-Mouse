@@ -5,7 +5,7 @@ records every commanded motor power to a file on the Pico's own filesystem; copy
 it to the PC afterwards and `replay_log.py` re-drives the simulation from it, so
 a real run can be watched in the sim that could not observe it live.
 
-Pico-portable: `clock`, `config` only, no os.path, no f-string-free
+Pico-portable: `clock`, `config`, `files` only, no os.path, no f-string-free
 constraints beyond what the rest of the deployment set already assumes.
 
 Format (v1), one header block then one record per line:
@@ -28,6 +28,7 @@ lines. Replay therefore holds each power until the next timestamp.
 
 from hal import clock
 import config
+import files
 
 LOG_FORMAT_VERSION = 1
 
@@ -51,6 +52,7 @@ class MotorLog:
         self.records_written = 0
 
     def start(self):
+        files.ensure_dir(self.path_str)
         self._file = open(self.path_str, "w")
         self._file.write(f"# micromouse motor log v{LOG_FORMAT_VERSION}\n")
         self._file.write("# t_ms,left_power,right_power\n")

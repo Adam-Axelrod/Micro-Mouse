@@ -1,7 +1,7 @@
 """Replay a Pico motor trace through the PC simulation. PC-only.
 
 The Pico can drive but cannot draw; the PC can draw but was not there. This
-closes that gap: take the `motor_log.csv` a hardware run wrote, feed the recorded
+closes that gap: take the `runs/motor_log.csv` a hardware run wrote, feed the recorded
 powers back through the same drive_motors path, and step the sim between records
 so the run can be watched (or measured) after the fact.
 

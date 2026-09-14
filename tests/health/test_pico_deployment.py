@@ -83,8 +83,10 @@ def _build_deployment(directory):
         target = os.path.join(directory, filename)
         os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.copy(os.path.join(PACKAGE_DIR, filename), target)
+    # The board's runs/ directory, deployed the way CHEATSHEET.md section 2 says.
+    os.makedirs(os.path.join(directory, "runs"), exist_ok=True)
     shutil.copy(os.path.join(PACKAGE_DIR, "routes", "lap3x3.mmc"),
-                os.path.join(directory, "route.mmc"))
+                os.path.join(directory, "runs", "route.mmc"))
     with open(os.path.join(directory, "machine.py"), "w") as handle:
         handle.write(MACHINE_STUB)
 

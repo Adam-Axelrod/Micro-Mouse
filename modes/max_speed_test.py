@@ -28,7 +28,7 @@ a floor measurement: only the tape says what the chassis does.
         max_speed_test.run(distance_mm=3000)      # shorter dash
         max_speed_test.run(power=0.55)            # at cruise duty instead
 
-Every run appends a row to `max_speed_test.csv` on the Pico's filesystem.
+Every run appends a row to `runs/max_speed_test.csv` on the Pico's filesystem.
 
 The dash also POLLS THE ENCODERS while it drives, every
 `config.MAX_SPEED_SAMPLE_INTERVAL_MS`, and appends the samples to
@@ -85,6 +85,7 @@ ENCODER_TOLERANCE = 0.02
 def _append_log_row(row_text):
     """Append one result row, writing the header first if the file is new."""
     is_new = not files.file_exists(config.MAX_SPEED_LOG_PATH)
+    files.ensure_dir(config.MAX_SPEED_LOG_PATH)
     try:
         with open(config.MAX_SPEED_LOG_PATH, "a") as file_handle:
             if is_new:
@@ -195,6 +196,7 @@ def _write_samples(count, times_ms, left_ticks, right_ticks, power, distance_mm)
     if count <= 0:
         return
     is_new = not files.file_exists(config.MAX_SPEED_SAMPLE_LOG_PATH)
+    files.ensure_dir(config.MAX_SPEED_SAMPLE_LOG_PATH)
     try:
         with open(config.MAX_SPEED_SAMPLE_LOG_PATH, "a") as file_handle:
             if is_new:
@@ -461,7 +463,7 @@ def calibrate(travelled_mm=None, stopwatch_s=None, marked_mm=5000.0,
                     or the tyre is compressing (worth only tenths of a mm).
 
     Ticks default to the last run in this session. Pass them by hand to work
-    from a row of max_speed_test.csv instead.
+    from a row of runs/max_speed_test.csv instead.
     """
     if left_ticks is None or right_ticks is None:
         if LAST_RUN is None:

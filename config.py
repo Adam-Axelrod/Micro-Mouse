@@ -14,11 +14,21 @@ def _package_path(filename):
     return PACKAGE_DIR + "/" + filename if PACKAGE_DIR else filename
 
 
+# Everything a run WRITES goes here, on both targets: the package root stays
+# source and committed fixtures only. `files.ensure_dir` creates it, because a
+# fresh Pico has no `runs/` and MicroPython will not make a missing parent.
+RUNS_DIR = _package_path("runs")
+
+
+def _run_path(filename):
+    return RUNS_DIR + "/" + filename
+
+
 # Maps and routes. belief.num and route.mmc are run artefacts copied in from the
 # committed fixtures in mazes/ and routes/. Provenance: CONSTANTS.md.
-DEFAULT_MAZE = _package_path("groundtruth.num")
-SAVED_BELIEF_MAZE = _package_path("belief.num")
-SAVED_ROUTE = _package_path("route.mmc")
+DEFAULT_MAZE = _package_path("mazes/groundtruth.num")
+SAVED_BELIEF_MAZE = _run_path("belief.num")
+SAVED_ROUTE = _run_path("route.mmc")
 MAZES_DIR = _package_path("mazes")
 ROUTES_DIR = _package_path("routes")
 
@@ -29,12 +39,12 @@ INTER_LAP_SETTLE_S = 1.0               # brake held between laps (s)
 
 # Motor command trace. Written on the Pico during a run, copied to the PC and
 # replayed into the sim (see motor_log.py / replay_log.py).
-MOTOR_LOG_PATH = _package_path("motor_log.csv")
+MOTOR_LOG_PATH = _run_path("motor_log.csv")
 MOTOR_LOG_POWER_EPSILON = 0.001  # commanded powers closer than this are "unchanged"
 
 # Max speed test (mode 4). One dash at full duty over a marked distance, encoders
 # sampled through it, so one run gives both the average speed and the ramp.
-MAX_SPEED_LOG_PATH = _package_path("max_speed_test.csv")
+MAX_SPEED_LOG_PATH = _run_path("max_speed_test.csv")
 MAX_SPEED_TEST_DISTANCE_MM = 5200.0    # 5 m marked run, plus 200 mm of overrun
 MAX_SPEED_TEST_POWER = 1.0             # full duty: the point is the ceiling
 MAX_SPEED_TEST_COUNTDOWN_BLINKS = 3    # slow LED blinks before the dash starts
@@ -44,7 +54,7 @@ MAX_SPEED_TEST_MAX_DURATION_S = 20.0   # runaway guard on any single dash (s)
 
 # Mode 4 encoder sampling. Polling during the dash turns one run into a velocity
 # curve, so the ramp and the terminal speed come out together.
-MAX_SPEED_SAMPLE_LOG_PATH = _package_path("max_speed_samples.csv")
+MAX_SPEED_SAMPLE_LOG_PATH = _run_path("max_speed_samples.csv")
 MAX_SPEED_SAMPLE_INTERVAL_MS = 20       # encoder poll period during the dash (ms)
 MAX_SPEED_SAMPLE_LIMIT = 1200           # pre-allocated sample slots (count)
 MAX_SPEED_RAMP_SMOOTH_SAMPLES = 5       # samples averaged into one velocity point (count)
@@ -54,7 +64,7 @@ MAX_SPEED_TABLE_MIN_ROWS = 20           # print every sample rather than fall be
 
 # Lap soak (mode 5). The route in SAVED_ROUTE, driven many times, one log row per
 # lap. The robot starts at the CENTRE of the start cell. Background: D-023.
-SOAK_LOG_PATH = _package_path("lap_soak.csv")
+SOAK_LOG_PATH = _run_path("lap_soak.csv")
 SOAK_LAPS = 30                         # laps per run
 # Below cruise duty on purpose. Do not go far under it: the deadband is unmeasured
 # and beneath it the wheels do not start at all.

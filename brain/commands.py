@@ -1,4 +1,5 @@
 import config
+import files
 
 # Kept tiny and egocentric: F carries cell count; turns take no arguments
 FORWARD = "F"   # F n: drive forward n cells
@@ -273,6 +274,7 @@ def write_command_file(route, out_path_str, start_heading=config.DIRECTIONS[0],
                        maze_name=None, grid=None):
     """Convert route to commands and write to text file."""
     movement_commands = path_to_commands(route, start_heading)
+    files.ensure_dir(out_path_str)
     with open(out_path_str, "w") as file_handle:
         file_handle.write(render_command_file(
             movement_commands, maze_name, grid,

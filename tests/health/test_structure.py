@@ -330,11 +330,20 @@ def test_committed_fixtures_parse():
 
 
 def test_working_files_are_not_tracked():
-    """belief.num and route.mmc are run artefacts, not fixtures."""
+    """Nothing under runs/ is tracked, and nothing a run writes is at root.
+
+    The package root holds source and committed fixtures only. A `runs/` path in
+    `git ls-files` means an artefact was committed; a bare one at root means a
+    writer bypassed `config._run_path` and wrote where it used to.
+    """
     tracked = subprocess.run(["git", "ls-files"], cwd=PACKAGE_DIR,
                              capture_output=True, text=True).stdout.split("\n")
-    for artefact in ("belief.num", "route.mmc", "motor_log.csv", "lap_soak.csv"):
+    for artefact in ("belief.num", "route.mmc", "motor_log.csv", "lap_soak.csv",
+                     "max_speed_test.csv", "max_speed_samples.csv"):
         assert artefact not in tracked, artefact
+        assert "runs/" + artefact not in tracked, "runs/" + artefact
+    assert not [path for path in tracked if path.startswith("runs/")], \
+        "runs/ is gitignored: nothing in it may be committed"
     print("✓ test_working_files_are_not_tracked passed")
 
 
