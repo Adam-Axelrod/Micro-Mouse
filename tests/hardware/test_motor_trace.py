@@ -14,6 +14,7 @@ import tempfile
 
 import config
 import drive
+import motion
 import motor_log
 import setup
 
@@ -102,10 +103,10 @@ def test_the_file_carries_the_v1_header():
 
 
 def test_a_pivot_is_traced_as_a_turn_then_a_stop():
-    """pivot_in_place is the one place a turn is timed. Its trace must show the
+    """motion.pivot is the one place a turn is timed. Its trace must show the
     opposite-sign pair held for a nonzero sim interval, then the brake."""
     fresh_trace()
-    drive.pivot_in_place(1, clockwise=True)
+    motion.pivot(1, clockwise=True)
     drive.stop_trace()
 
     records = motor_log.read_log(TRACE_PATH)
@@ -122,7 +123,7 @@ def test_a_pivot_is_traced_as_a_turn_then_a_stop():
 
 def test_an_anticlockwise_pivot_reverses_the_pair():
     fresh_trace()
-    drive.pivot_in_place(1, clockwise=False)
+    motion.pivot(1, clockwise=False)
     drive.stop_trace()
     _, left, right = motor_log.read_log(TRACE_PATH)[1]
     assert (left, right) == (-drive.TURN_DUTY_POWER, drive.TURN_DUTY_POWER)

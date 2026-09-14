@@ -14,6 +14,7 @@ if PACKAGE_DIR not in sys.path:
 
 import config
 import drive
+import motion
 import setup
 
 OFF = 65535
@@ -29,7 +30,7 @@ def test_the_boundary_symbols_exist_and_are_callable():
     """Every mode reaches for these names. bench_test and replay_log called
     `main.drive_motors` for weeks after it moved, because nothing asserted the
     name it used resolved."""
-    for name in ("drive_motors", "stop_motors", "run_motion_for", "pivot_in_place",
+    for name in ("drive_motors", "stop_motors", "run_motion_for", "pivot_for",
                  "blink_led", "start_trace", "stop_trace"):
         assert callable(getattr(drive, name)), f"drive.{name} is missing or not callable"
     assert drive.MAX_DUTY == OFF
@@ -124,15 +125,15 @@ def test_blink_led_returns_the_led_to_off():
 
 def test_a_pivot_scales_its_duration_with_the_angle_and_not_its_power():
     """The U-turn bug: scaling power AND duration together spun a 180 through 360."""
-    quarter = drive.pivot_seconds(1)
-    assert abs(drive.pivot_seconds(2) - 2.0 * quarter) < 1e-9
-    assert abs(drive.pivot_seconds(1, config.TURN_DUTY_POWER) - quarter) < 1e-9
+    quarter = motion.pivot_seconds(1)
+    assert abs(motion.pivot_seconds(2) - 2.0 * quarter) < 1e-9
+    assert abs(motion.pivot_seconds(1, config.TURN_DUTY_POWER) - quarter) < 1e-9
     print("✓ test_a_pivot_scales_its_duration_with_the_angle_and_not_its_power passed")
 
 
 def test_a_gentler_pivot_is_timed_longer():
     """A mode may turn slowly, but only if the clock knows it."""
-    assert drive.pivot_seconds(1, 0.20) > drive.pivot_seconds(1, 0.40)
+    assert motion.pivot_seconds(1, 0.20) > motion.pivot_seconds(1, 0.40)
     print("✓ test_a_gentler_pivot_is_timed_longer passed")
 
 

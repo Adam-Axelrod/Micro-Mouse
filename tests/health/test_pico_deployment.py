@@ -68,7 +68,7 @@ drive.drive_motors(0.55, 0.55)
 drive.stop_motors()
 drive.stop_trace()
 
-assert len(main.MODES) == 6, main.MODES
+assert len(main.MODES) == 5, main.MODES
 print("OK")
 '''
 

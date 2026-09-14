@@ -23,31 +23,37 @@ import config
 # travels with it, and MicroPython has no namespace packages to paper over the
 # one that got left behind.
 DEPLOYMENT_SET = (
-    "main.py", "setup.py", "config.py", "drive.py",
+    "main.py", "setup.py", "config.py", "drive.py", "motion.py", "world.py",
     "brain/__init__.py", "brain/maze.py", "brain/explorer.py",
     "brain/search_algorithms.py", "brain/commands.py",
-    "exploration.py", "speed_run.py", "motor_log.py", "max_speed_test.py",
-    "lap_log.py", "clock.py", "diagnostic_encoders.py",
+    "modes/__init__.py", "modes/exploration.py", "modes/speed_run.py",
+    "modes/follow_route.py", "modes/max_speed_test.py",
+    "motor_log.py", "lap_log.py", "clock.py", "diagnostic_encoders.py",
 )
 
 # First-party packages that DO go on the board, unlike sim/.
-LOCAL_PACKAGES = ("brain",)
+LOCAL_PACKAGES = ("brain", "modes")
 
 # Which package may import what. `config` and the MicroPython builtins are always
 # allowed; everything else must be listed. This is how a directory earns its
 # place: it encodes a rule that can fail, instead of sorting files by topic.
 LAYERS = {
     "brain": {"brain"},   # AGENTS.md invariant 2: the brain stays pure.
+    # D-016 as a test: `modes` is absent from this set, so no mode may import
+    # another mode. A mode that wants a driver takes `drive`, and a mode that
+    # wants the executor takes `motion`.
+    "modes": {"brain", "clock", "drive", "lap_log", "motion", "motor_log",
+              "setup", "sim", "world"},
 }
 
 # Imported lazily, so it may sit outside the deployment set without breaking boot.
-OPTIONAL_ON_HARDWARE = ("bench_test.py",)
+OPTIONAL_ON_HARDWARE = ("modes/bench_test.py",)
 
 PICO_ONLY_BUILTINS = ("os", "sys", "time", "math", "gc", "array", "machine", "rp2", "utime")
 
 # Imports MicroPython's `machine`/`rp2` directly, so it cannot load on a PC.
 # setup.get_encoders() imports it lazily, on first use, for exactly this reason.
-PICO_ONLY_MODULES = ("diagnostic_encoders",)
+PICO_ONLY_MODULES = ("diagnostic_encoders", "modes.bench_test")
 
 
 def _local_modules():
@@ -231,7 +237,7 @@ def test_only_setup_probes_the_platform():
     """Every other module must take its hardware handles from setup."""
     offenders = []
     for path in _local_modules():
-        if path in ("setup.py", "diagnostic_encoders.py"):
+        if path in ("setup.py", "diagnostic_encoders.py", "modes/bench_test.py"):
             continue
         if "machine" in _toplevel_imports(path):
             offenders.append(path)

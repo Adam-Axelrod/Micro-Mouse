@@ -1,149 +1,44 @@
-"""Speed Run Mode (mode 2) for UKMARS Gemini Micromouse.
+"""Mode 5. Drive a hand-authored .mmc route verbatim, `laps` times.
 
-Loads the explored belief map, flood-fills the optimal route, and executes the
-resulting movement commands. Pico and PC compatible.
+No planning happens here. The route comes from a file, so this exercises the
+MOTION layer alone: if the robot ends up somewhere wrong, the planner is not a
+suspect. That is what makes it the useful path-following test.
 
-This module owns the ROUTE: loading a belief, planning over it, and turning
-egocentric verbs into timed drives. It does not own the motors -- `drive.py`
-does. Anything that only needs to move a wheel should import `drive`, not this.
+Driving a CLOSED route N times is the maze-relevant stress test. Every lap
+should return the robot to its start pose, so the offset after N laps is the
+accumulated open-loop error, and turn error accumulates instead of cancelling.
+
+THE SOAK IS THIS MODE WITH DIFFERENT NUMBERS. `--soak` sets `SOAK_LAPS` laps at
+`SOAK_DRIVE_POWER` and opens the lap log; that was mode 5 as a separate module,
+which drove the same code down the same path and could only differ in its
+defaults. Thirty laps of a 3x3 perimeter is about 22 m of driving, which turns a
+per-move bias too small to see into an offset a tape measure reads off the floor.
+
+It replaced an out-and-back corridor sprint, which reversed along its own arc and
+so cancelled every symmetric error: a 7% distance error overshot going out and
+undershot coming back, and landed on the start line regardless. A lap of a route
+cannot cancel like that, because the turns accumulate too.
+
+PLACEMENT: the robot goes at the CENTRE of the route's start cell, facing the
+recorded heading, not back against a wall. Every `F n` divides a whole number of
+cells by one speed, so a half-cell offset at the start is a half-cell error on
+the first move and for the whole run after it.
 """
 
 import math
 import time
 
-import clock
 from brain import commands
+from brain import maze
+import clock
 import config
 import drive
 import lap_log
-from brain import maze
-from brain import search_algorithms
+import motion
 import setup
-
-# Rendering is PC-only and optional. The `sim` package is never deployed to the
-# board, so on the Pico this import fails and every mode runs headless.
-try:
-    from sim.renderer import make_renderer
-except ImportError:
-    def make_renderer(real_maze):
-        return None
+import world
 
 HAS_SIM = setup.sim is not None
-
-
-def execute_movement_commands(movement_commands, render_object=None, belief=None,
-                              route=None, drive_power=None, turn_power=None):
-    """Execute egocentric movement verbs: F n, L, R, U, H.
-
-    Open loop. Each verb becomes a fixed power held for a computed number of
-    seconds, and no encoder is read while it runs. Distance divides by one
-    constant speed, so nothing here models the acceleration ramp -- see the
-    MAX_WHEEL_SPEED_MMS comment in config.py before trusting a short move.
-
-    `drive_power` and `turn_power` let a mode go slower than a speed run. Duration
-    is derived from the power actually used. Be careful what a slow run proves:
-    the speed a duty produces is assumed LINEAR in the duty and that has never
-    been measured, so a gentle lap misses its distance by more, not less.
-    """
-    if drive_power is None:
-        drive_power = drive.CRUISE_DUTY_POWER
-    print(f"Executing movement route: {movement_commands}")
-
-    cruise_speed_mms = drive_power * config.MAX_WHEEL_SPEED_MMS
-
-    for command_string in movement_commands:
-        if not command_string or command_string.startswith("#"):
-            continue
-
-        parts = command_string.split()
-        verb = parts[0]
-        arg = int(parts[1]) if len(parts) > 1 else None
-
-        if verb == commands.FORWARD:
-            cells_to_drive = arg
-            target_distance_mm = cells_to_drive * config.MM_PER_CELL
-            drive_time_seconds = target_distance_mm / cruise_speed_mms
-
-            drive.drive_motors(drive_power, drive_power)
-            drive.run_motion_for(drive_time_seconds, render_object, belief, route)
-            drive.stop_motors()
-
-        elif verb in (commands.LEFT, commands.RIGHT, commands.UTURN):
-            # quarter turns, and which way round. A U-turn takes the same
-            # direction as R; on the spot either way lands the same heading.
-            if verb == commands.LEFT:
-                quarter_turns, clockwise = 1, False
-            elif verb == commands.RIGHT:
-                quarter_turns, clockwise = 1, True
-            else:
-                quarter_turns, clockwise = 2, True
-
-            drive.pivot_in_place(quarter_turns, clockwise, render_object, belief,
-                                 route, turn_power)
-
-        elif verb == commands.HALT:
-            drive.stop_motors()
-            print("Route completed successfully!")
-            break
-
-        drive.run_motion_for(config.INTER_COMMAND_SETTLE_S, render_object, belief, route)
-
-
-def load_and_plan_route(belief_file_path=None, start_heading=config.DIRECTIONS[0]):
-    """Load saved grid belief map, flood fill shortest route, and return movement commands."""
-    if belief_file_path is None:
-        belief_file_path = config.SAVED_BELIEF_MAZE
-
-    if not maze.file_exists(belief_file_path):
-        print(f"Warning: No saved belief at {belief_file_path}, using ground truth maze.")
-        belief_file_path = config.DEFAULT_MAZE
-
-    cells, cols, rows = maze.num_file_import(belief_file_path)
-    discovered_maze = maze.MazeStructure(cells=cells, cols=cols, rows=rows)
-
-    optimal_route = search_algorithms.flood_fill(discovered_maze, config.START_POS)
-    movement_commands = commands.path_to_commands(optimal_route, start_heading=start_heading)
-
-    return optimal_route, movement_commands, discovered_maze
-
-
-def _sim_world(map_path=None, enable_render=False, grid=None, start_pose=None):
-    """Load the maze the sim and the renderer should use.
-
-    Returns (render_object, real_maze); either may be None. The maze comes back
-    as well as the renderer because a caller with no belief map of its own still
-    has to give the renderer something to draw.
-
-    With no map file but a `grid`, the world is a blank grid of that size. A
-    hand-drawn 3x3 route has no maze file behind it, and drawing it on the 16x16
-    default would put the mouse in the wrong world entirely.
-    """
-    if not (HAS_SIM or enable_render):
-        return None, None
-    if map_path:
-        real_maze = maze.MazeStructure(*maze.num_file_import(map_path))
-    elif grid:
-        real_maze = maze.MazeStructure(cols=grid[0], rows=grid[1])
-    else:
-        real_maze = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE))
-    if HAS_SIM:
-        setup.sim.set_sim_maze(real_maze)
-        if start_pose is not None:
-            _place_sim_mouse(start_pose)
-    return (make_renderer(real_maze) if enable_render else None), real_maze
-
-
-def _place_sim_mouse(start_pose):
-    """Put the simulated mouse in the middle of `start_pose`'s cell, facing it.
-
-    The sim always begins at (0, 0) facing north. A route drawn from anywhere
-    else would replay from the wrong square, which looks like a drive bug.
-    """
-    x, y, heading = start_pose
-    setup.sim.get_mouse_state().reset_pose(
-        (x + 0.5) * config.MM_PER_CELL,
-        (y + 0.5) * config.MM_PER_CELL,
-        config.HEADING_RADIANS[heading])
 
 
 def _load_route(route_path, laps, retrace=False):
@@ -204,31 +99,6 @@ def _load_route(route_path, laps, retrace=False):
     return movement_commands, header
 
 
-def lap_seconds(movement_commands, drive_power=None, turn_power=None):
-    """How long one lap of a route takes, by the same arithmetic that drives it.
-
-    The operator needs this before the motors arm: thirty laps is a walk-away job
-    or a stand-and-watch job depending on the number, and a mode that does not say
-    which gets run with a flat battery.
-    """
-    if drive_power is None:
-        drive_power = drive.CRUISE_DUTY_POWER
-    cruise_speed_mms = drive_power * config.MAX_WHEEL_SPEED_MMS
-    total_seconds = 0.0
-    for command_string in movement_commands:
-        if not command_string or command_string.startswith("#"):
-            continue
-        parts = command_string.split()
-        verb = parts[0]
-        if verb == commands.FORWARD:
-            total_seconds += int(parts[1]) * config.MM_PER_CELL / cruise_speed_mms
-        elif verb in commands.QUARTER_TURNS:
-            total_seconds += drive.pivot_seconds(
-                abs(commands.QUARTER_TURNS[verb]), turn_power)
-        total_seconds += config.INTER_COMMAND_SETTLE_S
-    return total_seconds
-
-
 def _lap_record(lap, started_ms, ticks_before, commanded_deg_per_lap, sample_light):
     """Everything measurable about one finished lap, while the brake is held."""
     ticks = setup.read_encoders()
@@ -267,43 +137,54 @@ def _abort_requested(seconds):
     return False
 
 
-def follow(route_path=None, map_path=None, laps=None, enable_render=False,
-           log_path=None, sample_light=False, power=None, turn_power=None,
-           retrace=False):
-    """Mode 6. Drive a hand-authored .mmc route verbatim, `laps` times.
+def run(route_path=None, map_path=None, laps=None, enable_render=False,
+        log_path=None, sample_light=False, power=None, turn_power=None,
+        retrace=False, soak=False):
+    """Drive the route `laps` times. See the module docstring for what it measures.
 
-    No planning happens here. The route comes from a file, so this exercises the
-    MOTION layer alone: if the robot ends up somewhere wrong, the planner is not
-    a suspect. That is what makes it the useful path-following test.
-
-    Driving a CLOSED route N times is the maze-relevant stress test. Every lap
-    should return the robot to its start pose, so the offset after N laps is the
-    accumulated open-loop error, and turn error accumulates instead of cancelling.
-
-    With `log_path` every lap is appended to that CSV, and `power` drives the
-    whole route slower than a speed run. That is mode 5: see `soak()` below, which
-    is this function with the soak defaults.
+    `soak=True` (`--soak`) is the long recorded version: `SOAK_LAPS` laps at
+    `SOAK_DRIVE_POWER`, every lap appended to `SOAK_LOG_PATH`, and the light
+    sensors sampled. An explicit `laps` or `power` still wins over the preset, so
+    a short soak is one flag away.
 
     `retrace` closes an open route by driving it out and back instead of refusing
     it. Read `commands.with_return_leg` before trusting what that measures.
     """
+    if soak:
+        if laps is None:
+            laps = config.SOAK_LAPS
+        if power is None:
+            power = config.SOAK_DRIVE_POWER
+        if turn_power is None:
+            turn_power = config.SOAK_TURN_POWER
+        if log_path is None:
+            log_path = config.SOAK_LOG_PATH
+        sample_light = True
     if route_path is None:
         route_path = config.SAVED_ROUTE
     if laps is None:
         laps = config.FOLLOW_ROUTE_LAPS
 
-    print("=== STARTING FOLLOW ROUTE MODE ===")
+    if soak:
+        print("=== LAP SOAK ({} laps) ===".format(laps))
+        print("Drive power {:.2f} (a speed run cruises at {:.2f}); turns at {:.2f}."
+              .format(power, drive.CRUISE_DUTY_POWER, turn_power))
+        print("MARK THE START POSE: both wheel contact points and the heading.")
+        print("Press either button between laps to abort.")
+    else:
+        print("=== STARTING FOLLOW ROUTE MODE ===")
+    print("Place the robot at the CENTRE of the start cell, not against a wall.")
     vetted = _load_route(route_path, laps, retrace)
     if vetted is None:
         return None
     movement_commands, header = vetted
 
     drive.start_trace()
-    drive.blink_led(6, 80)
+    drive.blink_led(5, 80)
 
-    render_object, real_maze = _sim_world(map_path, enable_render,
-                                         grid=header.get("grid"),
-                                         start_pose=header.get("start"))
+    render_object, real_maze = world.sim_world(map_path, enable_render,
+                                               grid=header.get("grid"),
+                                               start_pose=header.get("start"))
 
     ticks_before = setup.read_encoders(reset=True)
     if ticks_before is None:
@@ -320,7 +201,7 @@ def follow(route_path=None, map_path=None, laps=None, enable_render=False,
             print("Could not open {}: {}. Driving without a log.".format(
                 log.path, log.error))
 
-    per_lap_s = lap_seconds(movement_commands, power, turn_power)
+    per_lap_s = motion.lap_seconds(movement_commands, power, turn_power)
     total_s = laps * (per_lap_s + config.INTER_LAP_SETTLE_S)
     print("One lap takes {:.1f} s; {} lap(s) is about {:.0f} min {:.0f} s.".format(
         per_lap_s, laps, total_s // 60, total_s % 60))
@@ -333,8 +214,8 @@ def follow(route_path=None, map_path=None, laps=None, enable_render=False,
         if laps > 1:
             print("--- lap {} of {}".format(lap, laps))
         started_ms = clock.now_ms()
-        execute_movement_commands(movement_commands, render_object, real_maze, None,
-                                  power, turn_power)
+        motion.execute(movement_commands, render_object, real_maze, None,
+                       power, turn_power)
         drive.stop_motors()
 
         record = _lap_record(lap, started_ms, ticks_before, commanded_deg_per_lap,
@@ -361,45 +242,6 @@ def follow(route_path=None, map_path=None, laps=None, enable_render=False,
     if len(records) > 1:
         _report_laps(records, aborted, laps)
     return movement_commands
-
-
-def soak(laps=None, route_path=None, map_path=None, enable_render=False, power=None,
-         retrace=False):
-    """Mode 5. Drive the saved route `laps` times over, logging every lap.
-
-    The same motion as mode 6, run long and recorded. Thirty laps of a 3x3
-    perimeter is about 22 m of driving, which turns a per-move bias too small to
-    see into an offset a tape measure reads off the floor.
-
-    It replaced an out-and-back corridor sprint, which reversed along its own arc
-    and so cancelled every symmetric error: a 7% distance error overshot going
-    out and undershot coming back, and landed on the start line regardless. A lap
-    of a route cannot cancel like that, because the turns accumulate too.
-
-    SPEED: it runs at `config.SOAK_DRIVE_POWER`, below the speed-run cruise duty,
-    because the first question is whether the robot holds a line at all. Raise it
-    with `power=` once it does.
-
-    PLACEMENT: the robot goes at the CENTRE of the route's start cell, facing the
-    recorded heading, not back against a wall. Every `F n` divides a whole number
-    of cells by one speed, so a half-cell offset at the start is a half-cell
-    error on the first move and for the whole run after it.
-    """
-    if laps is None:
-        laps = config.SOAK_LAPS
-    if power is None:
-        power = config.SOAK_DRIVE_POWER
-    turn_power = config.SOAK_TURN_POWER
-    print("=== LAP SOAK ({} laps) ===".format(laps))
-    print("Drive power {:.2f} (a speed run cruises at {:.2f}); turns at {:.2f}."
-          .format(power, drive.CRUISE_DUTY_POWER, turn_power))
-    print("Place the robot at the CENTRE of the start cell, not against a wall.")
-    print("MARK THE START POSE: both wheel contact points and the heading.")
-    print("Press either button between laps to abort.")
-    return follow(route_path=route_path, map_path=map_path, laps=laps,
-                  enable_render=enable_render, log_path=config.SOAK_LOG_PATH,
-                  sample_light=True, power=power, turn_power=turn_power,
-                  retrace=retrace)
 
 
 def _print_lap(record):
@@ -516,21 +358,3 @@ def _report_drift(laps, movement_commands, start_pose=None):
         print("  offset from start: {:.0f} mm".format(
             ((state.x_mm - start_x) ** 2 + (state.y_mm - start_y) ** 2) ** 0.5))
         print("  (the sim has no acceleration ramp, so its offset is optimistic)")
-
-
-def run(enable_render=False):
-    """Run speed run mode."""
-    print("=== STARTING SPEED RUN MODE ===")
-    drive.start_trace()
-    drive.blink_led(5, 80)
-
-    route, movement_commands, belief = load_and_plan_route()
-    print(f"Optimal cell path ({len(route)} cells): {route}")
-
-    render_object, _real_maze = _sim_world(enable_render=enable_render)
-
-    execute_movement_commands(movement_commands, render_object, belief, route)
-
-
-if __name__ == "__main__":
-    run()

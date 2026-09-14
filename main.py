@@ -20,10 +20,11 @@ except AttributeError:
     pass
 
 import drive
-import exploration
-import max_speed_test
+from modes import exploration
+from modes import follow_route
+from modes import max_speed_test
 import setup
-import speed_run
+from modes import speed_run
 
 # The e-stop printed in CHEATSHEET.md is `import main; main.stop_motors()`. It is
 # typed at a REPL with a robot already moving, so it is kept working here rather
@@ -38,7 +39,7 @@ def run_bench(**kwargs):
     (AGENTS.md, CHEATSHEET.md section 2). Importing it at module scope made a
     minimal Pico deployment fail to boot, and cost the RAM on every ordinary run.
     """
-    import bench_test
+    from modes import bench_test
     bench_test.run_all()
 
 
@@ -51,8 +52,8 @@ MODES = [
     ("Speed Run", speed_run.run, ()),
     ("Bench Test", run_bench, ()),
     ("Max Speed Test", max_speed_test.run, ()),
-    ("Lap Soak", speed_run.soak, ("laps", "route_path", "map_path", "power", "retrace")),
-    ("Follow Route", speed_run.follow, ("route_path", "map_path", "laps", "retrace")),
+    ("Follow Route", follow_route.run,
+     ("route_path", "map_path", "laps", "power", "retrace", "soak")),
 ]
 
 # CLI overrides, so a headless PC run does not need a button. Index into MODES.
@@ -62,8 +63,10 @@ CLI_MODE_FLAGS = {
     "--speed": 1,
     "--bench": 2,
     "--maxspeed": 3,
+    "--follow": 4,
+    # The soak is Follow Route with the soak preset, not a mode of its own. The
+    # flag stayed, because it is what the operator procedures tell you to type.
     "--soak": 4,
-    "--follow": 5,
 }
 
 # `--name=value` options, mapped to the keyword the runner takes. PC convenience
@@ -79,6 +82,7 @@ CLI_OPTIONS = {
 # carry no value: `--retrace=True` is not a thing anyone should have to type.
 CLI_SWITCHES = {
     "--retrace": "retrace",
+    "--soak": "soak",
 }
 
 

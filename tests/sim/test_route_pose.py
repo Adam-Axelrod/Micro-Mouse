@@ -18,7 +18,7 @@ if PACKAGE_DIR not in sys.path:
 from brain import commands
 import config
 import setup
-import speed_run
+import world as sim_world
 
 TOLERANCE_MM = 1e-6
 
@@ -30,7 +30,7 @@ def _pose():
 
 def test_the_sim_mouse_lands_in_the_centre_of_the_start_cell():
     for cell, heading in (((0, 0), "n"), ((2, 1), "e"), ((1, 2), "s"), ((3, 3), "w")):
-        speed_run._place_sim_mouse((cell[0], cell[1], heading))
+        sim_world.place_sim_mouse((cell[0], cell[1], heading))
         x_mm, y_mm, heading_radians = _pose()
         assert abs(x_mm - (cell[0] + 0.5) * config.MM_PER_CELL) < TOLERANCE_MM, cell
         assert abs(y_mm - (cell[1] + 0.5) * config.MM_PER_CELL) < TOLERANCE_MM, cell
@@ -50,7 +50,7 @@ def test_every_compass_heading_points_the_way_side_delta_says():
 
 def test_a_route_grid_builds_the_world_without_a_maze_file():
     """A hand-drawn 3x3 has no .num behind it; the 16x16 default is the wrong world."""
-    _render, world = speed_run._sim_world(grid=(3, 3), start_pose=(1, 1, "e"))
+    _render, world = sim_world.sim_world(grid=(3, 3), start_pose=(1, 1, "e"))
     assert (world.cols, world.rows) == (3, 3), (world.cols, world.rows)
     x_mm, _y_mm, _heading = _pose()
     assert abs(x_mm - 1.5 * config.MM_PER_CELL) < TOLERANCE_MM, x_mm
@@ -58,16 +58,16 @@ def test_a_route_grid_builds_the_world_without_a_maze_file():
 
 
 def test_a_map_file_still_wins_over_the_route_grid():
-    _render, world = speed_run._sim_world("mazes/blank6x6.num", grid=(3, 3))
+    _render, world = sim_world.sim_world("mazes/blank6x6.num", grid=(3, 3))
     assert (world.cols, world.rows) == (6, 6), (world.cols, world.rows)
     print("✓ test_a_map_file_still_wins_over_the_route_grid passed")
 
 
 def test_the_committed_lap_fixture_starts_and_ends_in_the_same_cell():
     header = commands.read_route_header(config.ROUTES_DIR + "/lap3x3.mmc")
-    speed_run._place_sim_mouse(header["start"])
+    sim_world.place_sim_mouse(header["start"])
     before = _pose()
-    speed_run._place_sim_mouse((header["goal"][0], header["goal"][1], header["start"][2]))
+    sim_world.place_sim_mouse((header["goal"][0], header["goal"][1], header["start"][2]))
     assert _pose() == before, "the fixture's goal is not its start"
     print("✓ test_the_committed_lap_fixture_starts_and_ends_in_the_same_cell passed")
 

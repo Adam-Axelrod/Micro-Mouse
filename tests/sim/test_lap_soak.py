@@ -18,7 +18,7 @@ import tempfile
 from brain import commands
 import config
 import setup
-import speed_run
+from modes import follow_route
 
 CLOSED_ROUTE = config.ROUTES_DIR + "/lap3x3.mmc"
 VIA_CENTRE_ROUTE = config.ROUTES_DIR + "/lap3x3_via_centre.mmc"
@@ -64,26 +64,26 @@ def lap_rows(path):
 
 def test_a_route_that_does_not_return_to_its_start_cell_is_refused():
     path = write_route(OPEN_ROUTE)
-    assert speed_run.follow(path, laps=2) is None, "2 laps of an open route must refuse"
+    assert follow_route.run(path, laps=2) is None, "2 laps of an open route must refuse"
     print("✓ test_a_route_that_does_not_return_to_its_start_cell_is_refused passed")
 
 
 def test_one_lap_of_that_same_route_still_drives():
     """One lap is valid: the route only has to close if it repeats."""
     path = write_route(OPEN_ROUTE)
-    assert speed_run.follow(path, laps=1) is not None
+    assert follow_route.run(path, laps=1) is not None
     print("✓ test_one_lap_of_that_same_route_still_drives passed")
 
 
 def test_a_route_that_leaves_its_own_grid_is_refused():
     path = write_route("# grid: 3x3\n# start: 0 0 n\nF 4\nH\n")
-    assert speed_run.follow(path, laps=1) is None
+    assert follow_route.run(path, laps=1) is None
     print("✓ test_a_route_that_leaves_its_own_grid_is_refused passed")
 
 
 def test_the_soak_writes_one_row_per_lap():
     log_path = soak_log_path()
-    speed_run.soak(laps=3, route_path=CLOSED_ROUTE)
+    follow_route.run(soak=True, laps=3, route_path=CLOSED_ROUTE)
     rows = lap_rows(log_path)
     assert len(rows) == 3, rows
     assert [row.split(",")[0] for row in rows] == ["1", "2", "3"], rows
@@ -92,7 +92,7 @@ def test_the_soak_writes_one_row_per_lap():
 
 def test_every_logged_lap_carries_ticks_and_a_light_reading():
     log_path = soak_log_path()
-    speed_run.soak(laps=2, route_path=VIA_CENTRE_ROUTE)
+    follow_route.run(soak=True, laps=2, route_path=VIA_CENTRE_ROUTE)
     for row in lap_rows(log_path):
         fields = row.strip().split(",")
         assert all(field != "" for field in fields), fields
@@ -103,7 +103,7 @@ def test_every_logged_lap_carries_ticks_and_a_light_reading():
 def test_a_closed_route_returns_the_sim_mouse_to_its_start_cell():
     """No ramp is modelled, so the sim should close a closed route exactly."""
     soak_log_path()
-    speed_run.soak(laps=2, route_path=VIA_CENTRE_ROUTE)
+    follow_route.run(soak=True, laps=2, route_path=VIA_CENTRE_ROUTE)
     header = commands.read_route_header(VIA_CENTRE_ROUTE)
     state = setup.sim.get_mouse_state()
     start_x = (header["start"][0] + 0.5) * config.MM_PER_CELL
@@ -116,7 +116,7 @@ def test_a_closed_route_returns_the_sim_mouse_to_its_start_cell():
 def test_a_retrace_makes_an_open_route_lappable():
     path = write_route(OPEN_ROUTE)
     soak_log_path()
-    assert speed_run.soak(laps=3, route_path=path, retrace=True) is not None
+    assert follow_route.run(soak=True, laps=3, route_path=path, retrace=True) is not None
     assert len(lap_rows(config.SOAK_LOG_PATH)) == 3
     print("✓ test_a_retrace_makes_an_open_route_lappable passed")
 
@@ -124,7 +124,7 @@ def test_a_retrace_makes_an_open_route_lappable():
 def test_a_retraced_lap_returns_the_sim_mouse_to_its_start_cell():
     path = write_route(OPEN_ROUTE)
     soak_log_path()
-    speed_run.soak(laps=2, route_path=path, retrace=True)
+    follow_route.run(soak=True, laps=2, route_path=path, retrace=True)
     state = setup.sim.get_mouse_state()
     offset_mm = ((state.x_mm - 0.5 * config.MM_PER_CELL) ** 2
                  + (state.y_mm - 0.5 * config.MM_PER_CELL) ** 2) ** 0.5

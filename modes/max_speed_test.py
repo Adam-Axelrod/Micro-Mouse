@@ -42,6 +42,7 @@ import time
 import clock
 import config
 import drive
+import motion
 from brain import maze
 import setup
 
@@ -108,8 +109,8 @@ def plan(distance_mm=None, power=None):
     if power <= 0.0:
         raise ValueError("power must be above 0 to move")
 
-    assumed_speed_mms = power * config.MAX_WHEEL_SPEED_MMS
-    commanded_seconds = distance_mm / assumed_speed_mms
+    assumed_speed_mms = motion.cruise_speed_mms(power)
+    commanded_seconds = motion.forward_seconds(distance_mm, power)
     capped_seconds = min(commanded_seconds, config.MAX_SPEED_TEST_MAX_DURATION_S)
     if capped_seconds < commanded_seconds:
         print("Duration capped at {:.1f} s by MAX_SPEED_TEST_MAX_DURATION_S.".format(capped_seconds))
