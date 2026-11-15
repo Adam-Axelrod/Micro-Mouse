@@ -20,6 +20,7 @@ except AttributeError:
     pass
 
 from hal import drive
+from record import motor_log
 from modes import exploration
 from modes import follow_route
 from hal import setup
@@ -129,7 +130,7 @@ def execute(mode_index, enable_render, argv=()):
     try:
         runner(enable_render=enable_render, **options)
     finally:
-        drive.stop_trace()
+        motor_log.stop_trace()
 
 
 def main():
@@ -141,7 +142,7 @@ def main():
 
     # The trace is on by default without a sim, because a hardware run is
     # otherwise unobservable. `--log` forces it on for a PC run too.
-    drive.start_trace(force="--log" in sys.argv)
+    motor_log.start_trace(force="--log" in sys.argv)
     drive.stop_motors()
 
     print("Maze Mouse Ready.")

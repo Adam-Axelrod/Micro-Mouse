@@ -5,7 +5,7 @@ records every commanded motor power to a file on the Pico's own filesystem; copy
 it to the PC afterwards and `replay_log.py` re-drives the simulation from it, so
 a real run can be watched in the sim that could not observe it live.
 
-Pico-portable: `clock`, `config`, `files` only, no os.path, no f-string-free
+Pico-portable: `clock`, `drive`, `setup`, `config`, `files` only, no os.path, no f-string-free
 constraints beyond what the rest of the deployment set already assumes.
 
 Format (v1), one header block then one record per line:
@@ -27,6 +27,8 @@ lines. Replay therefore holds each power until the next timestamp.
 """
 
 from hal import clock
+from hal import drive
+from hal import setup
 import config
 import files
 
@@ -86,6 +88,38 @@ class MotorLog:
             return
         self._file.close()
         self._file = None
+
+
+MOTOR_TRACE = MotorLog(
+    config.MOTOR_LOG_PATH,
+    clock_ms=setup.sim.sim_time_ms if setup.sim is not None else None,
+)
+
+
+def start_trace(force=False):
+    """Begin recording commanded motor powers to config.MOTOR_LOG_PATH.
+
+    Idempotent, so a mode may call it without knowing whether `main` already did.
+    On the Pico there is no renderer and no sim, so a run is otherwise invisible
+    and the trace is ON BY DEFAULT; on the PC it costs a file for nothing unless
+    the caller asks for it with `--log`. An open trace is the drive's
+    `power_listener`.
+    """
+    if MOTOR_TRACE.is_recording():
+        return MOTOR_TRACE
+    if force or setup.sim is None:
+        MOTOR_TRACE.start()
+        # Record the resting state so the first real power change has a baseline
+        # to be a change FROM. Without it the trace starts mid-motion.
+        MOTOR_TRACE.record(0.0, 0.0)
+        drive.power_listener = MOTOR_TRACE.record
+    return MOTOR_TRACE
+
+
+def stop_trace():
+    """Close the trace file and clear the listener. Safe when nothing was started."""
+    drive.power_listener = None
+    MOTOR_TRACE.close()
 
 
 def read_log(path_str):

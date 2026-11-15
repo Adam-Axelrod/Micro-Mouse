@@ -31,9 +31,10 @@ def test_the_boundary_symbols_exist_and_are_callable():
     `main.drive_motors` for weeks after it moved, because nothing asserted the
     name it used resolved."""
     for name in ("drive_motors", "stop_motors", "run_motion_for", "pivot_for",
-                 "blink_led", "start_trace", "stop_trace"):
+                 "blink_led"):
         assert callable(getattr(drive, name)), f"drive.{name} is missing or not callable"
     assert drive.MAX_DUTY == OFF
+    assert hasattr(drive, "power_listener"), "drive.power_listener is missing"
     assert drive.CRUISE_DUTY_POWER == config.CRUISE_DUTY_POWER
     assert drive.TURN_DUTY_POWER == config.TURN_DUTY_POWER
     assert isinstance(drive.RENDER_EVERY_N_STEPS, int) and drive.RENDER_EVERY_N_STEPS > 0

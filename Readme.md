@@ -117,7 +117,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`motion.py`** | The motion layer: the ONE place a distance or an angle becomes a duration. `execute` (the verb executor), `forward_seconds`, `pivot_seconds`, `lap_seconds`. Every open-loop error is made here. |
 | **`world.py`** | The one place the sim world and the renderer are set up. Returns `None` on the board, so a mode runs headless. |
 | **`files.py`** | `file_exists`: `os.stat` without `os.path`, which MicroPython does not have. Root level beside `config.py`, because every layer needs it. |
-| **`hal/drive.py`** | The motor boundary. `drive_motors` / `stop_motors` / `run_motion_for` / `pivot_for` / `blink_led`, and the motor trace. Everything that moves a wheel goes through here, and nothing here computes a duration. |
+| **`hal/drive.py`** | The motor boundary. `drive_motors` / `stop_motors` / `run_motion_for` / `pivot_for` / `blink_led`, and the `power_listener` hook that a trace sets. Everything that moves a wheel goes through here, and nothing here computes a duration. |
 | **`hal/setup.py`** | Hardware pin definitions for motors, reflective sensors, buttons and encoders, plus `read_encoders()`. The single platform boundary. |
 | **`config.py`** | Single source of truth for physical scale (180 mm cells, wheel diameter, track width), timing, and file paths. |
 | **`brain/maze.py`** | `MazeStructure` class and `.num` file reader (`num_file_import`) / writer (`num_file_export`). |
@@ -131,7 +131,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`tools/max_speed_test.py`** | REPL only, no button mode. One straight dash over a marked distance, sampling the encoders as it goes so the acceleration ramp and terminal speed come out of a single run. Plus `calibrate()`. |
 | **`record/lap_log.py`** | The soak's instrument. One CSV row per lap, and the lit-minus-unlit sensor read. Never raises at the call site: a dead log must not end a twenty minute run. |
 | **`hal/clock.py`** | Which clock a timed run uses. The Pico sleeps and its wall clock is real; the PC steps physics and only the sim clock means anything. |
-| **`record/motor_log.py`** | Change-only CSV trace of commanded motor powers (format v1). Written on every hardware run, and on `--log` from the PC. |
+| **`record/motor_log.py`** | Change-only CSV trace of commanded motor powers (format v1). Owns `start_trace` / `stop_trace` and `MOTOR_TRACE`. Written on every hardware run, and on `--log` from the PC. |
 | **`hal/encoders.py`** | PIO quadrature encoder counter. Takes its pins from `hal/setup.py` and is reached through `setup.read_encoders()`, never imported directly. |
 | **`mazes/groundtruth.num`** | Default ground-truth maze fixture used by PC simulation. |
 | **`runs/`** | Everything a run writes, on both targets: the logs, plus the working `belief.num` and `route.mmc`. Gitignored. The package root holds source and committed fixtures only. |

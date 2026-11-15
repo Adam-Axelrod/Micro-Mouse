@@ -54,6 +54,7 @@ BOOT_CHECK = '''
 import os
 import sys
 from hal import drive
+from record import motor_log
 import main
 from hal import setup
 
@@ -64,11 +65,11 @@ assert not os.path.exists("tools"), "the deployment holds a tools/ folder"
 assert "pygame" not in sys.modules, "pygame reached the board"
 assert callable(main.stop_motors), "the CHEATSHEET e-stop is gone"
 
-drive.start_trace()
-assert drive.MOTOR_TRACE.is_recording(), "the trace did not open without a sim"
+motor_log.start_trace()
+assert motor_log.MOTOR_TRACE.is_recording(), "the trace did not open without a sim"
 drive.drive_motors(0.55, 0.55)
 drive.stop_motors()
-drive.stop_trace()
+motor_log.stop_trace()
 
 assert [mode[0] for mode in main.MODES] == ["Explorer", "Speed Run", "Bench Test", "Follow Route"], main.MODES
 assert "--maxspeed" not in main.CLI_MODE_FLAGS

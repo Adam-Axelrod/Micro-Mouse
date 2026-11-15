@@ -45,6 +45,7 @@ from hal import clock
 import config
 import files
 from hal import drive
+from record import motor_log
 import motion
 from brain import maze
 from hal import setup
@@ -345,7 +346,7 @@ def report_ramp(samples=None, stride_ms=None):
 def run(distance_mm=None, power=None, enable_render=False):
     """Drive one straight dash at full duty, brake hard, and report the timing."""
     distance_mm, power, assumed_speed_mms, commanded_seconds = plan(distance_mm, power)
-    drive.start_trace()
+    motor_log.start_trace()
 
     print("=== MAX SPEED TEST ===")
     print("Clear a straight lane of at least {:.2f} m.".format((distance_mm + 500.0) / 1000.0))

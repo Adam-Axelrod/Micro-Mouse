@@ -48,8 +48,8 @@ ALWAYS_ALLOWED = ("config", "files")
 
 LAYERS = {
     "brain": {"brain"},          # AGENTS.md invariant 2: the brain stays pure.
-    "hal": {"hal", "record", "sim"},   # the board, and what it writes down.
-    "record": {"hal", "record"},       # an instrument reads the clock, nothing more.
+    "hal": {"hal", "sim"},             # the board; it never reaches up to `record`.
+    "record": {"hal", "record"},       # a recorder hooks into the board, never the reverse.
     # D-016 as a test: `modes` is absent from this set, so no mode may import
     # another mode. A mode that wants a driver takes `hal.drive`, and a mode
     # that wants the executor takes `motion`.

@@ -217,7 +217,7 @@ Every Pico run traces commanded motor powers to `runs/motor_log.csv` automatical
 `main.py` opens the trace before dispatching a mode and closes it after. Starting
 a mode straight from the REPL bypasses `main`, so `max_speed_test.run()` and
 `follow_route.run()` open the trace themselves. Anything else run by hand needs
-`from hal import drive; drive.start_trace(force=True)` first.
+`from record import motor_log; motor_log.start_trace(force=True)` first.
 
 On the PC:
 

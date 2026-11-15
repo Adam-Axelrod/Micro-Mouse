@@ -35,6 +35,7 @@ import config
 import files
 from hal import drive
 from record import lap_log
+from record import motor_log
 import motion
 from hal import setup
 import world
@@ -180,7 +181,7 @@ def run(route_path=None, map_path=None, laps=None, enable_render=False,
         return None
     movement_commands, header = vetted
 
-    drive.start_trace()
+    motor_log.start_trace()
     drive.blink_led(4, 80)
 
     render_object, real_maze = world.sim_world(map_path, enable_render,

@@ -14,13 +14,12 @@ a *driver* is what left `bench_test` and `replay_log` calling
 Durations are NOT computed here. `motion.py` turns a distance or an angle into
 a number of seconds; this module holds a power for however long it is told to.
 
-Pico-portable: `time`, `config`, `setup`, `motor_log` only.
+Pico-portable: `time`, `config`, `setup` only.
 """
 
 import time
 
 import config
-from record import motor_log
 from hal import setup
 
 HAS_SIM = setup.sim is not None
@@ -34,33 +33,9 @@ RENDER_EVERY_N_STEPS = 4
 # Full 16-bit duty. Active-low drive, so this value is a channel OFF.
 MAX_DUTY = 65535
 
-MOTOR_TRACE = motor_log.MotorLog(
-    config.MOTOR_LOG_PATH,
-    clock_ms=setup.sim.sim_time_ms if setup.sim is not None else None,
-)
-
-
-def start_trace(force=False):
-    """Begin recording commanded motor powers to config.MOTOR_LOG_PATH.
-
-    Idempotent, so a mode may call it without knowing whether `main` already did.
-    On the Pico there is no renderer and no sim, so a run is otherwise invisible
-    and the trace is ON BY DEFAULT; on the PC it costs a file for nothing unless
-    the caller asks for it with `--log`.
-    """
-    if MOTOR_TRACE.is_recording():
-        return MOTOR_TRACE
-    if force or not HAS_SIM:
-        MOTOR_TRACE.start()
-        # Record the resting state so the first real power change has a baseline
-        # to be a change FROM. Without it the trace starts mid-motion.
-        MOTOR_TRACE.record(0.0, 0.0)
-    return MOTOR_TRACE
-
-
-def stop_trace():
-    """Close the trace file. Safe to call when nothing was ever started."""
-    MOTOR_TRACE.close()
+# None, or a function of (left_power, right_power). drive_motors and stop_motors
+# call it with the clamped powers. `record.motor_log` sets it to trace a run.
+power_listener = None
 
 
 def blink_led(times, on_duration_ms=100, off_duration_ms=None):
@@ -83,7 +58,8 @@ def drive_motors(left_power, right_power):
     left_p = max(-1.0, min(1.0, left_power))
     right_p = max(-1.0, min(1.0, right_power))
 
-    MOTOR_TRACE.record(left_p, right_p)
+    if power_listener is not None:
+        power_listener(left_p, right_p)
 
     if left_p >= 0:
         setup.leftRev.duty_u16(MAX_DUTY)
@@ -102,7 +78,8 @@ def drive_motors(left_power, right_power):
 
 def stop_motors():
     """Both channels of both motors at full duty: a BRAKE, not a coast (BT-3)."""
-    MOTOR_TRACE.record(0.0, 0.0)
+    if power_listener is not None:
+        power_listener(0.0, 0.0)
     setup.leftFwd.duty_u16(MAX_DUTY)
     setup.leftRev.duty_u16(MAX_DUTY)
     setup.rightFwd.duty_u16(MAX_DUTY)
@@ -113,8 +90,7 @@ def run_motion_for(duration_seconds, render_object=None, belief=None, route=None
     """Let time pass while the motors drive.
 
     On the Pico this sleeps. On the PC it steps the sim instead, so wall-clock
-    time and sim time diverge completely -- which is why MOTOR_TRACE is given the
-    sim's clock above.
+    time and sim time diverge completely.
     """
     if not HAS_SIM:
         time.sleep(duration_seconds)

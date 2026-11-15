@@ -15,6 +15,7 @@ from brain import search_algorithms
 import config
 import files
 from hal import drive
+from record import motor_log
 import motion
 import world
 
@@ -41,7 +42,7 @@ def load_and_plan_route(belief_file_path=None, start_heading=config.DIRECTIONS[0
 def run(enable_render=False):
     """Run speed run mode."""
     print("=== STARTING SPEED RUN MODE ===")
-    drive.start_trace()
+    motor_log.start_trace()
     drive.blink_led(2, 80)
 
     route, movement_commands, belief = load_and_plan_route()
