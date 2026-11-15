@@ -30,7 +30,7 @@ or `geometry` must never go on the board:
 
 ```
 main.py config.py files.py motion.py world.py
-hal/__init__.py hal/setup.py hal/drive.py hal/clock.py hal/diagnostic_encoders.py
+hal/__init__.py hal/setup.py hal/drive.py hal/clock.py hal/encoders.py
 record/__init__.py record/motor_log.py record/lap_log.py
 brain/__init__.py brain/maze.py brain/explorer.py brain/search_algorithms.py
 brain/commands.py
@@ -51,7 +51,7 @@ cells and headings. `modes/` is one module per mode, and no mode imports
 another. `config.py` and `files.py` stay at root because every layer reads them
 and neither is a layer's business.
 
-`hal/diagnostic_encoders.py` is now part of the base set: `hal/setup.py` loads
+`hal/encoders.py` is now part of the base set: `hal/setup.py` loads
 it on first encoder read. `runs/route.mmc` is what mode 4 drives, so copy the route
 you mean to run: the board has no editor. Add for hardware work: `modes/bench_test.py` — `main.py` imports
 it lazily, so the set above boots without it.
@@ -75,7 +75,7 @@ mpremote mkdir :modes
 mpremote mkdir :runs
 mpremote cp main.py config.py files.py motion.py world.py :
 mpremote cp runs/belief.num runs/route.mmc :runs/
-mpremote cp hal/__init__.py hal/setup.py hal/drive.py hal/clock.py hal/diagnostic_encoders.py :hal/
+mpremote cp hal/__init__.py hal/setup.py hal/drive.py hal/clock.py hal/encoders.py :hal/
 mpremote cp record/__init__.py record/motor_log.py record/lap_log.py :record/
 mpremote cp brain/__init__.py brain/maze.py brain/explorer.py brain/search_algorithms.py brain/commands.py :brain/
 mpremote cp modes/__init__.py modes/exploration.py modes/speed_run.py modes/follow_route.py modes/max_speed_test.py :modes/

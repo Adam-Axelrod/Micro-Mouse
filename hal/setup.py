@@ -80,7 +80,7 @@ def get_encoders():
     machine, and that can fail; setup.py is imported by every module, so a
     failure at import would take the whole robot down instead of one read.
 
-    On the Pico the decoder is the PIO counter in diagnostic_encoders. On the
+    On the Pico the decoder is the PIO counter in encoders. On the
     PC it reads the simulated tick counters. Both answer
     get_counts(reset=False) with (left_ticks, right_ticks), forward positive.
     """
@@ -88,7 +88,7 @@ def get_encoders():
     if _encoders is None and encoder_error is None:
         try:
             if IS_HARDWARE:
-                from hal.diagnostic_encoders import Encoders
+                from hal.encoders import Encoders
                 _encoders = Encoders()
             else:
                 _encoders = sim.SimEncoders()

@@ -445,7 +445,7 @@ def _hand_roll_one(label, index, check_id):
     elif mine < 0:
         _record(check_id, "VALUE",
                 "{} alive but rolls NEGATIVE forward ({:+} ticks) -- "
-                "invert the sign in diagnostic_encoders.get_counts".format(label, mine))
+                "invert the sign in encoders.get_counts".format(label, mine))
         return True
     else:
         _record(check_id, "PASS", "{} alive, forward = positive ({:+} ticks)".format(label, mine))

@@ -57,7 +57,7 @@ Four layers. Each knows the layer below it and nothing above.
             +------------------------+   +--------------------------+
             | MicroPython "machine"  |   |       sim/ package       |
             | real PWM / ADC         |   | sim_machine -> mouse ->  |
-            | diagnostic_encoders    |   | geometry; renderer;      |
+            | encoders               |   | geometry; renderer;      |
             | (PIO quadrature)       |   | replay_log.  NEVER       |
             |                        |   | deployed to the board.   |
             +------------------------+   +--------------------------+
@@ -134,7 +134,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`record/lap_log.py`** | The soak's instrument. One CSV row per lap, and the lit-minus-unlit sensor read. Never raises at the call site: a dead log must not end a twenty minute run. |
 | **`hal/clock.py`** | Which clock a timed run uses. The Pico sleeps and its wall clock is real; the PC steps physics and only the sim clock means anything. |
 | **`record/motor_log.py`** | Change-only CSV trace of commanded motor powers (format v1). Written on every hardware run, and on `--log` from the PC. |
-| **`hal/diagnostic_encoders.py`** | PIO quadrature encoder counter. Takes its pins from `hal/setup.py` and is reached through `setup.read_encoders()`, never imported directly. |
+| **`hal/encoders.py`** | PIO quadrature encoder counter. Takes its pins from `hal/setup.py` and is reached through `setup.read_encoders()`, never imported directly. |
 | **`mazes/groundtruth.num`** | Default ground-truth maze fixture used by PC simulation. |
 | **`runs/`** | Everything a run writes, on both targets: the logs, plus the working `belief.num` and `route.mmc`. Gitignored. The package root holds source and committed fixtures only. |
 | **`runs/belief.num`** | Untracked working file: the current map the robot drives. Written by mode 1; hand-authored file used by mode 2 on hardware. Not committed; fixtures live under `mazes/`. |

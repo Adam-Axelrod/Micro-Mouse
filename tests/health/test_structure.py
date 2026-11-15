@@ -25,7 +25,7 @@ import config
 DEPLOYMENT_SET = (
     "main.py", "config.py", "files.py", "motion.py", "world.py",
     "hal/__init__.py", "hal/setup.py", "hal/drive.py", "hal/clock.py",
-    "hal/diagnostic_encoders.py",
+    "hal/encoders.py",
     "record/__init__.py", "record/motor_log.py", "record/lap_log.py",
     "brain/__init__.py", "brain/maze.py", "brain/explorer.py",
     "brain/search_algorithms.py", "brain/commands.py",
@@ -60,7 +60,7 @@ PICO_ONLY_BUILTINS = ("os", "sys", "time", "math", "gc", "array", "machine", "rp
 
 # Imports MicroPython's `machine`/`rp2` directly, so it cannot load on a PC.
 # setup.get_encoders() imports it lazily, on first use, for exactly this reason.
-PICO_ONLY_MODULES = ("hal.diagnostic_encoders", "modes.bench_test")
+PICO_ONLY_MODULES = ("hal.encoders", "modes.bench_test")
 
 
 def _local_modules():
@@ -303,7 +303,7 @@ def test_only_setup_probes_the_platform():
     """Every other module must take its hardware handles from setup."""
     offenders = []
     for path in _local_modules():
-        if path in ("hal/setup.py", "hal/diagnostic_encoders.py", "modes/bench_test.py"):
+        if path in ("hal/setup.py", "hal/encoders.py", "modes/bench_test.py"):
             continue
         if "machine" in _toplevel_imports(path):
             offenders.append(path)
