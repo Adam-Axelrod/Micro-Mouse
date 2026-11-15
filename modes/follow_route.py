@@ -1,4 +1,4 @@
-"""Mode 5. Drive a hand-authored .mmc route verbatim, `laps` times.
+"""Mode 4. Drive a hand-authored .mmc route verbatim, `laps` times.
 
 No planning happens here. The route comes from a file, so this exercises the
 MOTION layer alone: if the robot ends up somewhere wrong, the planner is not a
@@ -181,7 +181,7 @@ def run(route_path=None, map_path=None, laps=None, enable_render=False,
     movement_commands, header = vetted
 
     drive.start_trace()
-    drive.blink_led(5, 80)
+    drive.blink_led(4, 80)
 
     render_object, real_maze = world.sim_world(map_path, enable_render,
                                                grid=header.get("grid"),

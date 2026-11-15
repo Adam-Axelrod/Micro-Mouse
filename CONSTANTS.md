@@ -102,7 +102,7 @@ duty. Mode 4 at `power=0.55` predicts 14.1 s over 5 m if it holds.
 | `MAX_SPEED_TABLE_ROW_MS` | 100 | CHOSEN | One printed table row per this much time. |
 | `MAX_SPEED_TABLE_MIN_ROWS` | 20 | CHOSEN | Print every sample rather than fall below this many rows. |
 
-## Mode 5, the lap soak
+## Mode 4, the lap soak
 
 | Constant | Value | Class | Provenance |
 |---|---|---|---|
@@ -115,7 +115,7 @@ duty. Mode 4 at `power=0.55` predicts 14.1 s over 5 m if it holds.
 | `SOAK_TICK_DROPOUT_FRACTION` | 0.5 | CHOSEN | Below this fraction of the median lap is reported as an encoder dropout, not a slow lap. Generous, because battery sag over 30 laps is real. |
 | `SOAK_SLOWDOWN_WARN_PERCENT` | -5.0 | CHOSEN | First-to-last tick change that gets reported as battery sag. |
 
-## Mode 6, follow route
+## Mode 4, explicit follow-route calls
 
 | Constant | Value | Class | Provenance |
 |---|---|---|---|
@@ -235,3 +235,9 @@ it does not write them. When you promote one:
 
 - `BODY_LENGTH_MM`, `WALL_LENGTH_MM` and `WALL_WIDTH_MM` have no reader in the
   codebase at all. They are documentation that happens to be executable.
+
+## Powered floor diagnostics
+
+| Constant | Value | Class | Provenance |
+|---|---|---|---|
+| `BENCH_STRAIGHT_CELLS` | 2 | CHOSEN | Victor approved a two-cell (360 mm) BT-9 straight drive on 2026-09-14. Uses existing SOAK drive/turn powers so the checks reproduce stress-test motion. Wrong length changes the test lane and expected travel; it does not calibrate the chassis. |

@@ -6,7 +6,7 @@ produces BENCH EVIDENCE: every check ends in a recorded PASS/FAIL/value that
 
     Copy to the Pico, then in the REPL:
 
-        import bench_test
+        from modes import bench_test
         bench_test.run_all()     # guided, in dependency order
         bench_test.summary()     # paste-back block of every result so far
 
@@ -21,6 +21,8 @@ produces BENCH EVIDENCE: every check ends in a recorded PASS/FAIL/value that
         bt6_sensors()           passive  lit-minus-unlit ADC at known distances
         bt7_counts_per_rev()    passive  push a measured distance, get ticks/rev
         bt8_track_width()       passive  pivot 360 by hand, derive track width
+        bt9_straight_drive()    FLOOR    360 mm straight at stress-test power
+        bt10_single_pivot()     FLOOR    one left/right 90-degree pivot
 
     Deep encoder fault-finding tools (dead channel, intermittent trace, J1 flex):
         channel_levels()        passive  raw A/B logic level (pins 8/9 & 6/7)
@@ -29,13 +31,16 @@ produces BENCH EVIDENCE: every check ends in a recorded PASS/FAIL/value that
         spin_check()            POWERED  brief pulse with runaway guard
         encoder_fault_menu()    interactive fault diagnostic menu
 
-POWERED checks demand the wheels are OFF THE GROUND and ask you to confirm it
+BT-0..BT-8 POWERED checks demand the wheels are OFF THE GROUND and ask you to confirm it
 before any duty is written. Every powered pulse is hard-capped by
 MAX_PULSE_MS and always ends in stop_motors().
 
 Several checks cannot be judged by the software -- only you can see which way a
 wheel turned. Those ask a question and record YOUR answer; that is deliberate,
 the operator is the sensor. Answers are y / n / s (skip).
+
+BT-9 and BT-10 instead require an explicitly confirmed clear FLOOR and use
+the normal open-loop route executor at stress-test power, braking before measurements.
 
 Needs the Pico's rp2/PIO for the encoder checks, so it does not run on the PC.
 """
@@ -46,6 +51,8 @@ import time
 import config
 from hal import drive
 from hal import setup
+from brain import commands
+import motion
 
 # --------------------------------------------------------------------------------------
 # Bench constants (invariant 5: no bare numbers in logic)
@@ -873,6 +880,59 @@ def bt8_track_width():
 # Runner
 # ======================================================================================
 
+
+def _floor_motion(check_id, verbs):
+    """Explicit on-floor arming, then use the route executor and always brake."""
+    print("POWERED FLOOR CHECK: mark the starting pose and clear the travel area.")
+    print("Straights use {:.2f}; pivots use {:.2f}.".format(
+        config.SOAK_DRIVE_POWER, config.SOAK_TURN_POWER))
+    if _ask("Is the robot aligned on the marked floor with the area clear?") is not True:
+        _record(check_id, "SKIP", "floor motion not confirmed")
+        return False
+    _pause("Watch from above; press Enter to drive")
+    try:
+        motion.execute(verbs, drive_power=config.SOAK_DRIVE_POWER,
+                       turn_power=config.SOAK_TURN_POWER)
+    finally:
+        drive.stop_motors()
+    return True
+
+
+def bt9_straight_drive():
+    """Drive two cells without turns; record floor travel, lateral drift and heading."""
+    print("== BT-9 straight drive: {} mm, no turns ==".format(
+        config.BENCH_STRAIGHT_CELLS * config.MM_PER_CELL))
+    print("Mark a straight line and starting nose position; allow clear run-off.")
+    verbs = ["{} {}".format(commands.FORWARD, config.BENCH_STRAIGHT_CELLS), commands.HALT]
+    if not _floor_motion("BT-9", verbs):
+        return
+    for label, question in (
+        ("travel_mm", "Actual forward travel along the marked line, mm?"),
+        ("lateral_mm", "Lateral offset, mm (right positive, left negative)?"),
+        ("heading_deg", "Heading change, degrees (right positive, left negative)?"),
+    ):
+        value = _ask_number(question)
+        _record("BT-9." + label, "SKIP" if value is None else "VALUE", str(value))
+    print("Repeat from the same pose. Curving before any turn points to unequal wheel motion.")
+
+
+def bt10_single_pivot():
+    """One left or right 90-degree pivot; record the angle before any forward drive."""
+    print("== BT-10 single 90-degree pivot ==")
+    direction = input("  ? Pivot direction [l/r, blank to skip] ").strip().lower()
+    if direction not in ("l", "r"):
+        _record("BT-10", "SKIP", "no left/right direction selected")
+        return
+    print("Mark perpendicular heading lines; align the robot on the first line.")
+    verb = commands.LEFT if direction == "l" else commands.RIGHT
+    if not _floor_motion("BT-10", [verb, commands.HALT]):
+        return
+    value = _ask_number("Actual angle turned, degrees (positive in the selected direction)?")
+    _record("BT-10.angle_deg", "SKIP" if value is None else "VALUE",
+            "direction={} actual={}".format(direction, value))
+    print("Compare with 90 degrees. Measure before driving or making a return turn.")
+
+
 ORDERED_CHECKS = (
     ("BT-0  boot and indicators", bt0_boot),
     ("BT-1  buttons", bt1_buttons),
@@ -883,6 +943,8 @@ ORDERED_CHECKS = (
     ("BT-6  reflective sensors", bt6_sensors),
     ("BT-7  counts per rev", bt7_counts_per_rev),
     ("BT-8  track width", bt8_track_width),
+    ("BT-9  straight drive on floor", bt9_straight_drive),
+    ("BT-10 single 90-degree pivot on floor", bt10_single_pivot),
 )
 
 

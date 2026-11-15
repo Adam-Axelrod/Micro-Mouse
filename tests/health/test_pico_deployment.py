@@ -68,7 +68,10 @@ drive.drive_motors(0.55, 0.55)
 drive.stop_motors()
 drive.stop_trace()
 
-assert len(main.MODES) == 5, main.MODES
+assert [mode[0] for mode in main.MODES] == ["Explorer", "Speed Run", "Bench Test", "Follow Route"], main.MODES
+assert "--maxspeed" not in main.CLI_MODE_FLAGS
+assert main.selected_cli_mode(("--follow",)) == 3
+assert main.selected_cli_mode(("--soak",)) == 3
 print("OK")
 '''
 
@@ -123,7 +126,43 @@ def test_the_deployment_set_needs_no_third_party_package():
     print("✓ test_the_deployment_set_needs_no_third_party_package passed")
 
 
+def test_pico_mode_four_defaults_to_retraced_stress_test():
+    check = BOOT_CHECK + """
+from modes import follow_route
+import config
+seen = []
+def capture_route(path, laps, retrace=False):
+    seen.append((path, laps, retrace))
+    return None  # Refuse before motors arm; exercise dispatcher and defaults.
+follow_route._load_route = capture_route
+index = next(i for i, mode in enumerate(main.MODES) if mode[0] == "Follow Route")
+main.execute(index, False)
+assert seen == [(config.SAVED_ROUTE, config.SOAK_LAPS, True)], seen
+main.execute(index, False, ("--laps=5", "--power=0.3"))
+assert seen[-1] == (config.SAVED_ROUTE, 5, True), seen
+"""
+    with tempfile.TemporaryDirectory() as directory:
+        _build_deployment(directory)
+        result = subprocess.run([sys.executable, "-c", check],
+                                cwd=directory, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr.strip()
+        assert "Drive power 0.40" in result.stdout, result.stdout
+        assert "Drive power 0.30" in result.stdout, result.stdout
+    print("✓ test_pico_mode_four_defaults_to_retraced_stress_test passed")
+
+
+def test_micropico_upload_includes_operator_route_and_map():
+    import json
+    with open(os.path.join(PACKAGE_DIR, ".vscode", "settings.json")) as handle:
+        settings = json.load(handle)
+    assert settings.get("micropico.syncAllFileTypes") or {"mmc", "num"}.issubset(
+        settings.get("micropico.syncFileTypes", [])), "MicroPico upload skips route/map files"
+    print("✓ test_micropico_upload_includes_operator_route_and_map passed")
+
+
 TESTS = (
+    test_micropico_upload_includes_operator_route_and_map,
+    test_pico_mode_four_defaults_to_retraced_stress_test,
     test_the_minimal_deployment_boots,
     test_a_deployment_missing_drive_fails_loudly,
     test_the_deployment_set_needs_no_third_party_package,

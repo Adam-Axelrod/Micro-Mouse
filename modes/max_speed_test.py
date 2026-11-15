@@ -1,4 +1,4 @@
-"""Max speed test (mode 4) for the UKMARS Gemini micromouse.
+"""Max speed dash instrument (REPL only) for the UKMARS Gemini micromouse.
 
 `MAX_WHEEL_SPEED_MMS` has never been measured. Every open-loop `F n` duration
 divides by it, so every distance the robot drives inherits its error. This mode

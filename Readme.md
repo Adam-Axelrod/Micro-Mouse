@@ -28,7 +28,7 @@ Four layers. Each knows the layer below it and nothing above.
     +-----------+ +-------------+ +------------+ +------------+ +------------+
                                   +------------------------+
                                   |     follow_route       |
-                                  | mode 5, and --soak     |
+                                  | mode 4, and --soak     |
                                   +------------------------+
                          |              |            |            |
                          +--------------+------------+------------+
@@ -98,12 +98,10 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
    * Drives the mouse through the movement sequence.
 3. **Mode 3: Bench Test Mode (`--bench`)**:
    * Runs bringing-up hardware checks end-to-end (`modes/bench_test.py`).
-4. **Mode 4: Max Speed Test (`--maxspeed`)**:
-   * Drives one straight dash at full duty over a marked distance (5.2 m by default), then brakes hard.
-   * The LED goes solid for the whole drive, so a stopwatch can time a marked 5 m. See `CHEATSHEET.md` §5.1.
-   * Captures the encoder ticks either side of the dash. `calibrate(travelled_mm, stopwatch_s)` yields `MAX_WHEEL_SPEED_MMS` from the stopwatch, and checks the decoder against the ruler-confirmed wheel: an implied diameter above 32 mm means edges are being dropped.
-5. **Mode 5: Follow Route (`--follow`)**:
+4. **Mode 4: Follow Route (`--follow`)**:
    * Drives a hand-authored `.mmc` verbatim, so the planner is not a suspect if the robot ends up in the wrong place. `--route=`, `--map=` and `--laps=` select the file, the world and the lap count.
+
+   On the Pico, button-selected mode 4 uses the soak preset with retrace by default: 30 logged laps of `runs/route.mmc` at power 0.40, with a 180° turn at the destination and at home. PC `--follow` and direct REPL calls retain their explicit options.
 
    **The lap soak (`--soak`) is this mode with a preset**, not a mode of its own: it was the same code down the same path and could only differ in its defaults.
    * Drives the route in `runs/route.mmc` 30 times at a gentler duty than a speed run (0.40), and appends one row per lap to `runs/lap_soak.csv`.
@@ -130,8 +128,8 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`brain/commands.py`** | Translates absolute cell routes into egocentric relative commands (`F n`, `L`, `R`, `U`, `H`), and reads and writes the `.mmc` route file, header included. |
 | **`modes/exploration.py`** | Mode 1. Cell-by-cell exploration loop. Simulation only -- see section 2. |
 | **`modes/speed_run.py`** | Mode 2, and the only mode that PLANS. Loads a belief, floods it, turns the path into verbs and hands them to `motion.execute`. Owns the route, not the motors and not the timing. |
-| **`modes/follow_route.py`** | Mode 5. Drives a `.mmc` verbatim, `laps` times. `soak=True` (`--soak`) is the same run, long and logged. |
-| **`modes/bench_test.py`** | Mode 3. The BT-0..BT-8 hardware bring-up checks. Imported lazily by `main.py`; not in the minimal deployment set. |
+| **`modes/follow_route.py`** | Mode 4. Drives a `.mmc` verbatim, `laps` times. `soak=True` (`--soak`) is the same run, long and logged. |
+| **`modes/bench_test.py`** | Mode 3. BT-0..BT-8 bring-up plus BT-9 straight-drive and BT-10 single-pivot floor measurements. Imported lazily by `main.py`; not in the minimal deployment set. |
 | **`modes/max_speed_test.py`** | Mode 4. One straight dash over a marked distance, sampling the encoders as it goes so the acceleration ramp and terminal speed come out of a single run. Plus `calibrate()`. |
 | **`record/lap_log.py`** | The soak's instrument. One CSV row per lap, and the lit-minus-unlit sensor read. Never raises at the call site: a dead log must not end a twenty minute run. |
 | **`hal/clock.py`** | Which clock a timed run uses. The Pico sleeps and its wall clock is real; the PC steps physics and only the sim clock means anything. |

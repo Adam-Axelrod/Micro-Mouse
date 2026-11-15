@@ -32,8 +32,9 @@ SAVED_ROUTE = _run_path("route.mmc")
 MAZES_DIR = _package_path("mazes")
 ROUTES_DIR = _package_path("routes")
 
-# Follow-route mode (mode 6). A closed route driven N times: the offset after N
-# laps is the accumulated open-loop error. Mode 5 is this, run long and logged.
+# Follow-route mode (mode 4). The Pico button default is a logged retrace soak;
+# explicit PC/REPL follow calls may run a single route.
+BENCH_STRAIGHT_CELLS = 2               # cells; BT-9 straight drive (360 mm)
 FOLLOW_ROUTE_LAPS = 1                  # laps per run; > 1 to accumulate drift
 INTER_LAP_SETTLE_S = 1.0               # brake held between laps (s)
 
@@ -62,7 +63,7 @@ MAX_SPEED_RAMP_PLATEAU_FRACTION = 0.98  # of terminal speed = the ramp is over (
 MAX_SPEED_TABLE_ROW_MS = 100            # one printed table row per this much time (ms)
 MAX_SPEED_TABLE_MIN_ROWS = 20           # print every sample rather than fall below this (rows)
 
-# Lap soak (mode 5). The route in SAVED_ROUTE, driven many times, one log row per
+# Lap soak (mode 4). The route in SAVED_ROUTE, driven many times, one log row per
 # lap. The robot starts at the CENTRE of the start cell. Background: D-023.
 SOAK_LOG_PATH = _run_path("lap_soak.csv")
 SOAK_LAPS = 30                         # laps per run

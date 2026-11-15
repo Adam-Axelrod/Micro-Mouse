@@ -52,13 +52,17 @@ another. `config.py` and `files.py` stay at root because every layer reads them
 and neither is a layer's business.
 
 `hal/diagnostic_encoders.py` is now part of the base set: `hal/setup.py` loads
-it on first encoder read. `runs/route.mmc` is what mode 5 drives, so copy the route
+it on first encoder read. `runs/route.mmc` is what mode 4 drives, so copy the route
 you mean to run: the board has no editor. Add for hardware work: `modes/bench_test.py` — `main.py` imports
 it lazily, so the set above boots without it.
 
 `hal/drive.py` is the motor boundary: every mode drives through it. `motion.py`
 is the one place a distance or an angle becomes a duration. The whole `sim/`
 directory is PC-only and must never go on the board.
+
+MicroPico project uploads must include `mmc` and `num` in
+`micropico.syncFileTypes`; this workspace now configures both. Its extension
+defaults skip route and map files. Check that `runs/route.mmc` actually arrived.
 
 With `mpremote` (the VS Code MicroPico extension does the same thing via its
 "Upload project" command):
@@ -136,8 +140,10 @@ Single checks: `bench_test.bt2_motor_polarity()` etc.
 | BT-6 | reflective sensors + distance curve | no |
 | BT-7 | encoder counts per wheel rev | no |
 | BT-8 | track width | no |
+| BT-9 | 360 mm straight drive; measure travel, lateral drift, heading | **yes, on floor** |
+| BT-10 | one left/right 90° pivot; measure actual angle | **yes, on floor** |
 
-Powered checks demand you confirm the wheels are off the ground, cap every
+BT-2, BT-3 and BT-5 demand you confirm the wheels are off the ground, cap every
 pulse at 1.2 s / 0.45 duty, and always end in `drive.stop_motors()`.
 
 Order matters: BT-2 before BT-5 (a pairing failure is ambiguous between dead
@@ -148,6 +154,24 @@ width is derived through `MM_PER_TICK`).
 `-> raw channel ...` line often appears *after* the wheel has already moved.
 The `[Enter]` pause immediately before each pulse is your cue to watch — not
 the printed line.
+
+### Powered floor motion checks
+
+Keep USB connected for the interactive prompts. Mark a straight line and a pair
+of perpendicular heading lines on a clear floor, then run either check directly:
+
+```python
+from modes import bench_test
+bench_test.bt9_straight_drive()   # 360 mm at 0.40; no turns
+bench_test.bt10_single_pivot()    # choose l/r; one 90° pivot at 0.40
+bench_test.summary()
+```
+
+Both require fresh floor confirmation and brake before measurements. BT-9 asks
+for actual travel, lateral offset and heading change; BT-10 asks for actual turn
+angle. Repeat three times from the same pose. These record VALUEs, without an
+invented tolerance or automatic calibration. They also appear at the end of
+mode 3; skip earlier checks when focusing on motion.
 
 ### Deeper encoder fault-finding
 
@@ -172,18 +196,18 @@ SW2 will start.
 |---|---|---|
 | 1 | 1 | Explorer — updates the belief, writes `runs/belief.num` |
 | 2 | 2 | Speed run — loads `runs/belief.num`, flood-fills, drives it |
-| 3 | 3 | Bench test — the BT-0..BT-8 bring-up checks |
-| 4 | 4 | Max speed test — one 5.2 m dash at full duty (§5.1) |
-| 5 | 5 | Follow route — drive `runs/route.mmc` verbatim, N laps (§5.3); the soak is this mode with the soak preset (§5.2) |
+| 3 | 3 | Bench — BT-0..BT-8 bring-up, BT-9 straight, BT-10 pivot |
+| 4 | 4 | Route stress test — `runs/route.mmc`, 30 logged retrace laps at 0.40 (§5.2) |
 
 Boot lands on mode 1 and blinks once. Each SW1 press steps to the next mode and
-blinks its number. To reach mode 4 from boot, press SW1 three times and count
-four blinks, then press SW2. Mode 5 wraps back to mode 1.
+blinks its number. To reach the route stress test from boot, press SW1 three times and count
+four blinks, then press SW2. Mode 4 wraps back to mode 1.
 
-**The lap soak stopped being a mode of its own.** It drove mode 5's code down
-mode 5's path and differed only in its defaults, so it is now `soak=True`
-(`--soak`). Off the buttons there is no preset: from the wheel, mode 5 drives
-`FOLLOW_ROUTE_LAPS` laps at cruise duty.
+**The lap soak stopped being a mode of its own.** It drove mode 4's code down
+mode 4's path and differed only in its defaults, so it is now `soak=True`
+(`--soak`). On the Pico, button-selected mode 4 defaults to the soak preset plus retrace:
+30 logged laps at power 0.40, turning 180° at the destination and again at home.
+It reads the hand-drawn route in `runs/route.mmc`.
 
 > Exploration has **no hardware path today** — `read_walls` reads
 > `mazes/groundtruth.num` (not deployed to the Pico) and returns all four sides.
@@ -202,9 +226,8 @@ python3 main.py            # headless sim, speed run
 python3 main.py --render   # with pygame
 python3 main.py --step     # mode 1, exploration
 python3 main.py --bench    # mode 3, bench test (Pico only)
-python3 main.py --maxspeed # mode 4, max speed test
-python3 main.py --follow    # mode 5, one lap of runs/route.mmc
-python3 main.py --soak      # mode 5 with the soak preset: 30 logged laps
+python3 main.py --follow    # mode 4, one lap of runs/route.mmc
+python3 main.py --soak      # mode 4 with the soak preset: 30 logged laps
 python3 main.py --soak --laps=5 --power=0.3   # shorter and slower
 python3 main.py --log      # also write a motor trace (automatic on hardware)
 ```
@@ -218,7 +241,7 @@ python3 sim/replay_log.py --render   # watch it
 
 ---
 
-### 5.1 Max speed test (mode 4)
+### 5.1 Straight dash instrument (REPL only)
 
 This is how `MAX_WHEEL_SPEED_MMS` gets a measured number behind it. Every
 open-loop `F n` duration divides by that constant, and it has never been
@@ -230,7 +253,7 @@ Set up:
 2. Leave at least 0.7 m of run-off past the far mark. The robot targets
    5.2 m, and it will overshoot if it is faster than the constant claims.
 3. Line the robot's nose up on the start line, pointing down the lane.
-4. Select mode 4 (SW1 ×3, count four blinks) and press SW2.
+4. From the REPL: `from modes import max_speed_test; max_speed_test.run()`.
 
 What the LED does, in order:
 
@@ -301,10 +324,9 @@ speed alone, start the robot about 0.5 m behind the start line and time only
 the marked 5 m.
 
 Beware the circular case. On the PC the sim both plans and simulates with
-`MAX_WHEEL_SPEED_MMS`, so `python3 main.py --maxspeed` always lands exactly on
 target. That checks the arithmetic and says nothing about the chassis.
 
-### 5.3 Follow route (mode 5)
+### 5.3 Follow route (mode 4)
 
 Drives `runs/route.mmc` exactly as written, with no planning. Nothing about the
 planner is involved, so a route driven wrongly is the drive layer's fault.
@@ -324,7 +346,7 @@ draws small ones.
 
 **Place the robot as the header says.** `.mmc` verbs are egocentric, so the same
 file drives a different shape from a different pose. The editor records the pose
-it was drawn from, and mode 5 prints it before the motors arm:
+it was drawn from, and mode 4 prints it before the motors arm:
 
 ```
 # grid: 3x3
@@ -332,7 +354,7 @@ it was drawn from, and mode 5 prints it before the motors arm:
 # goal: 0 0
 ```
 
-A file with no header is driven from cell (0, 0) facing north, and mode 5 says so
+A file with no header is driven from cell (0, 0) facing north, and mode 4 says so
 rather than guessing silently. Redraw it to record a pose.
 
 Laps are the maze-relevant drift test. Every lap should return the robot to its
@@ -346,12 +368,12 @@ from modes import follow_route; follow_route.run(laps=10)
 A route driven in laps must return to its start **cell AND heading**. A drawn
 route does neither by default: `path_to_commands` derives turns from cell
 transitions, so it always ends on a drive, and the last cell is wherever you
-stopped clicking. Mode 5 refuses more than one lap of a route that does not close,
+stopped clicking. Mode 4 refuses more than one lap of a route that does not close,
 and says where it ends instead. Append the closing moves by hand — see
 `routes/lap3x3.mmc` (the bare perimeter) and `routes/lap3x3_via_centre.mmc` (the
 perimeter plus the centre cell, all nine cells of a 3x3).
 
-### 5.2 Lap soak (mode 5, `--soak`)
+### 5.2 Lap soak (mode 4, `--soak`)
 
 Thirty laps of the route in `runs/route.mmc`, logged lap by lap. A 3x3 perimeter lap is
 about 0.72 m of driving, so thirty laps is ~22 m and turns a per-move bias too

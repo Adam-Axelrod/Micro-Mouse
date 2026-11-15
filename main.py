@@ -22,7 +22,6 @@ except AttributeError:
 from hal import drive
 from modes import exploration
 from modes import follow_route
-from modes import max_speed_test
 from hal import setup
 from modes import speed_run
 
@@ -51,7 +50,6 @@ MODES = [
     ("Explorer", exploration.run, ()),
     ("Speed Run", speed_run.run, ()),
     ("Bench Test", run_bench, ()),
-    ("Max Speed Test", max_speed_test.run, ()),
     ("Follow Route", follow_route.run,
      ("route_path", "map_path", "laps", "power", "retrace", "soak")),
 ]
@@ -62,11 +60,10 @@ CLI_MODE_FLAGS = {
     "--explorer": 0,
     "--speed": 1,
     "--bench": 2,
-    "--maxspeed": 3,
-    "--follow": 4,
+    "--follow": 3,
     # The soak is Follow Route with the soak preset, not a mode of its own. The
     # flag stayed, because it is what the operator procedures tell you to type.
-    "--soak": 4,
+    "--soak": 3,
 }
 
 # `--name=value` options, mapped to the keyword the runner takes. PC convenience
@@ -122,6 +119,10 @@ def execute(mode_index, enable_render, argv=()):
     """Run one mode with the motor trace open around it."""
     name, runner, accepted = MODES[mode_index]
     options = cli_options(argv, accepted)
+    if setup.IS_HARDWARE and runner is follow_route.run:
+        # Button mode 4 stress-tests the hand-drawn route out and back.
+        options.setdefault("soak", True)
+        options.setdefault("retrace", True)
     print(f"Executing Mode {mode_index + 1}: {name}")
     if options:
         print(f"  options: {options}")
@@ -132,6 +133,10 @@ def execute(mode_index, enable_render, argv=()):
 
 
 def main():
+    if "--maxspeed" in sys.argv:
+        print("Max-speed mode was removed. Use from modes import max_speed_test; max_speed_test.run() at the REPL.")
+        return
+
     enable_render = "--render" in sys.argv or "-r" in sys.argv
 
     # The trace is on by default without a sim, because a hardware run is
