@@ -348,25 +348,26 @@ def test_working_files_are_not_tracked():
 
 
 def test_constants_md_names_every_constant():
-    """config.py says what a number is; CONSTANTS.md says how far to trust it.
+    """config.py and sim/render_config.py say what a number is; CONSTANTS.md says how far to trust it.
 
-    Fails when config.py gains a constant the document does not name.
+    Fails when either file gains a constant the document does not name.
     """
-    with open(os.path.join(PACKAGE_DIR, "config.py")) as handle:
-        source = handle.read()
     with open(os.path.join(PACKAGE_DIR, "CONSTANTS.md")) as handle:
         document = handle.read()
     declared = []
-    for node in ast.parse(source).body:
-        targets = node.targets if isinstance(node, ast.Assign) else []
-        for target in targets:
-            if isinstance(target, ast.Name) and target.id.isupper():
-                declared.append(target.id)
-        if isinstance(node, ast.Try):
-            for inner in node.body + [n for h in node.handlers for n in h.body]:
-                for target in getattr(inner, "targets", []):
-                    if isinstance(target, ast.Name) and target.id.isupper():
-                        declared.append(target.id)
+    for source_path in ("config.py", os.path.join("sim", "render_config.py")):
+        with open(os.path.join(PACKAGE_DIR, source_path)) as handle:
+            source = handle.read()
+        for node in ast.parse(source).body:
+            targets = node.targets if isinstance(node, ast.Assign) else []
+            for target in targets:
+                if isinstance(target, ast.Name) and target.id.isupper():
+                    declared.append(target.id)
+            if isinstance(node, ast.Try):
+                for inner in node.body + [n for h in node.handlers for n in h.body]:
+                    for target in getattr(inner, "targets", []):
+                        if isinstance(target, ast.Name) and target.id.isupper():
+                            declared.append(target.id)
     missing = sorted({name for name in declared if name not in document})
     assert not missing, "CONSTANTS.md does not mention: " + ", ".join(missing)
     print("\u2713 test_constants_md_names_every_constant passed")

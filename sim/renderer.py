@@ -6,6 +6,7 @@ import pygame
 import config
 from brain import maze
 from sim import geometry
+from sim import render_config
 
 def _load_font(size_px):
     """A pygame font, or None where fonts are unavailable (some headless runners).
@@ -30,8 +31,8 @@ def tile_px_for(cols, rows):
     a cell too small cannot be clicked and a cell too large wins nothing.
     """
     longest_side = max(cols, rows)
-    fitted = config.RENDER_TARGET_WINDOW_PX // longest_side
-    return int(max(config.RENDER_MIN_TILE_PX, min(config.RENDER_MAX_TILE_PX, fitted)))
+    fitted = render_config.RENDER_TARGET_WINDOW_PX // longest_side
+    return int(max(render_config.RENDER_MIN_TILE_PX, min(render_config.RENDER_MAX_TILE_PX, fitted)))
 
 
 def make_renderer(real_maze, hud_px=0):
@@ -60,7 +61,7 @@ class Renderer:
     def __init__(self, maze, hud_px=0):
         pygame.init()
         self.hud_px = hud_px
-        self.font = _load_font(config.RENDER_HUD_FONT_PX)
+        self.font = _load_font(render_config.RENDER_HUD_FONT_PX)
         self.maze = maze
         self.maze_height_mm = self.maze.structure.rows * config.MM_PER_CELL
         self.scale = tile_px_for(maze.structure.cols, maze.structure.rows)
@@ -69,7 +70,7 @@ class Renderer:
         # round briefly, which made every Renderer raise AttributeError; the
         # exception went unseen because make_renderer catches it and carries on
         # headless, and no automated run passed --render.
-        self.offset = config.RENDER_MARGIN_PX
+        self.offset = render_config.RENDER_MARGIN_PX
         self.screen = pygame.display.set_mode((maze.structure.cols * self.scale + 2 * self.offset,
              maze.structure.rows * self.scale + 2 * self.offset + self.hud_px))
         self.clock = pygame.time.Clock()        # display throttle
@@ -82,18 +83,18 @@ class Renderer:
                 self.close()
                 raise SystemExit
 
-        self.screen.fill(config.RENDER_BACKGROUND)
+        self.screen.fill(render_config.RENDER_BACKGROUND)
 
         for post in self.maze.posts.values(): # Unconditionally draw in all posts
             rect = self._rect_from_corners(post)
-            pygame.draw.rect(self.screen, config.RENDER_WALL_KNOWN, rect)
+            pygame.draw.rect(self.screen, render_config.RENDER_WALL_KNOWN, rect)
 
         for wall, corners in self.maze.h_walls.items():
             rect = self._rect_from_corners(corners)
             known = self.belief_state("H", wall, belief)
             pygame.draw.rect(
                 self.screen,
-                config.RENDER_WALL_KNOWN if known else config.RENDER_WALL_UNKNOWN,
+                render_config.RENDER_WALL_KNOWN if known else render_config.RENDER_WALL_UNKNOWN,
                 rect)
 
         for wall, corners in self.maze.v_walls.items():
@@ -101,22 +102,22 @@ class Renderer:
             known = self.belief_state("V", wall, belief)
             pygame.draw.rect(
                 self.screen,
-                config.RENDER_WALL_KNOWN if known else config.RENDER_WALL_UNKNOWN,
+                render_config.RENDER_WALL_KNOWN if known else render_config.RENDER_WALL_UNKNOWN,
                 rect)
 
 
         if done:
             for step in done:
-                self._fill_cell(step, config.RENDER_TILE_DONE)
+                self._fill_cell(step, render_config.RENDER_TILE_DONE)
             if animate:
-                time.sleep(config.RENDER_DONE_STEP_DELAY_S)
+                time.sleep(render_config.RENDER_DONE_STEP_DELAY_S)
                 pygame.display.flip()
 
         if path:
             for step in path:
-                self._fill_cell(step, config.RENDER_TILE_PATH)
+                self._fill_cell(step, render_config.RENDER_TILE_PATH)
                 if animate:
-                    time.sleep(config.RENDER_PATH_STEP_DELAY_S)
+                    time.sleep(render_config.RENDER_PATH_STEP_DELAY_S)
                     pygame.display.flip()
 
         if highlight and not route:  # {cell: colour}, painted over path/done
@@ -125,7 +126,7 @@ class Renderer:
 
         if route:  # an ORDERED cell list: the line and its arrows carry the order
             for step in route:
-                self._fill_cell(step, config.RENDER_TILE_PATH)
+                self._fill_cell(step, render_config.RENDER_TILE_PATH)
 
         if highlight:  # repainted after the route fill so start/end still win
             for cell, colour in highlight.items():
@@ -147,7 +148,7 @@ class Renderer:
             self._draw_hud(status or ())
 
         pygame.display.flip()
-        self.clock.tick(config.RENDER_FPS)
+        self.clock.tick(render_config.RENDER_FPS)
 
     """Echo the sim's continuous pose as a rotated chassis rectangle. Pure observer: samples
     MouseState (x_mm, y_mm, heading_radians) and the config chassis constants; body frame is
@@ -166,13 +167,13 @@ class Renderer:
         points_px = [self._px(mouse.x_mm + fwd * cos_h - lat * sin_h,
                               mouse.y_mm + fwd * sin_h + lat * cos_h)
                      for fwd, lat in corners_body]
-        pygame.draw.polygon(self.screen, config.RENDER_MOUSE_BODY, points_px,
-                            config.RENDER_MOUSE_OUTLINE_PX)
+        pygame.draw.polygon(self.screen, render_config.RENDER_MOUSE_BODY, points_px,
+                            render_config.RENDER_MOUSE_OUTLINE_PX)
         nose = self._px(mouse.x_mm + config.WHEEL_AXIS_TO_FRONT_MM * cos_h,
                         mouse.y_mm + config.WHEEL_AXIS_TO_FRONT_MM * sin_h)
-        pygame.draw.line(self.screen, config.RENDER_MOUSE_NOSE,
+        pygame.draw.line(self.screen, render_config.RENDER_MOUSE_NOSE,
                          self._px(mouse.x_mm, mouse.y_mm), nose,
-                         config.RENDER_MOUSE_OUTLINE_PX)
+                         render_config.RENDER_MOUSE_OUTLINE_PX)
 
     def _cell_centre_mm(self, cell):
         return ((cell[0] + 0.5) * config.MM_PER_CELL,
@@ -187,8 +188,8 @@ class Renderer:
         """
         centres_px = [self._px(*self._cell_centre_mm(cell)) for cell in route]
         if len(centres_px) > 1:
-            pygame.draw.lines(self.screen, config.RENDER_ROUTE_LINE, False, centres_px,
-                              config.RENDER_ROUTE_LINE_PX)
+            pygame.draw.lines(self.screen, render_config.RENDER_ROUTE_LINE, False, centres_px,
+                              render_config.RENDER_ROUTE_LINE_PX)
         for start_cell, end_cell in zip(route, route[1:]):
             self._draw_step_arrow(start_cell, end_cell)
 
@@ -202,9 +203,9 @@ class Renderer:
             return
         dx = (to_mm[0] - from_mm[0]) / span_mm
         dy = (to_mm[1] - from_mm[1]) / span_mm
-        reach_mm = config.MM_PER_CELL * config.RENDER_ROUTE_ARROW_FRACTION
+        reach_mm = config.MM_PER_CELL * render_config.RENDER_ROUTE_ARROW_FRACTION
         tip_mm = (midpoint_mm[0] + dx * reach_mm, midpoint_mm[1] + dy * reach_mm)
-        pygame.draw.polygon(self.screen, config.RENDER_ROUTE_LINE, [
+        pygame.draw.polygon(self.screen, render_config.RENDER_ROUTE_LINE, [
             self._px(*tip_mm),
             self._px(tip_mm[0] - dx * reach_mm - dy * reach_mm * 0.7,
                      tip_mm[1] - dy * reach_mm + dx * reach_mm * 0.7),
@@ -218,42 +219,42 @@ class Renderer:
         Skipped when the cells are too small to hold a number, which is the
         16x16 case: the arrows still carry the order there.
         """
-        if self.font is None or self.scale < config.RENDER_ROUTE_LABEL_MIN_TILE_PX:
+        if self.font is None or self.scale < render_config.RENDER_ROUTE_LABEL_MIN_TILE_PX:
             return
         visits = {}
         for step_number, cell in enumerate(route, start=1):
             visits.setdefault(cell, []).append(str(step_number))
-        label_font = _load_font(int(self.scale * config.RENDER_ROUTE_LABEL_FONT_FRACTION))
+        label_font = _load_font(int(self.scale * render_config.RENDER_ROUTE_LABEL_FONT_FRACTION))
         if label_font is None:
             return
         for cell, step_numbers in visits.items():
-            text = label_font.render(",".join(step_numbers), True, config.RENDER_ROUTE_LABEL)
+            text = label_font.render(",".join(step_numbers), True, render_config.RENDER_ROUTE_LABEL)
             corner_mm = (cell[0] * config.MM_PER_CELL + config.POST_SIDE_MM * 1.5,
                          (cell[1] + 1) * config.MM_PER_CELL - config.POST_SIDE_MM * 1.5)
             self.screen.blit(text, self._px(*corner_mm))
 
     def _draw_end_ring(self, cell):
         """Ring the route's last cell. A fill colour alone reads as one more cell."""
-        inset_mm = config.MM_PER_CELL * config.RENDER_END_RING_INSET
+        inset_mm = config.MM_PER_CELL * render_config.RENDER_END_RING_INSET
         corner_px = self._px(cell[0] * config.MM_PER_CELL + inset_mm,
                              (cell[1] + 1) * config.MM_PER_CELL - inset_mm)
         side_px = (config.MM_PER_CELL - 2 * inset_mm) * self.px_per_mm
-        pygame.draw.rect(self.screen, config.RENDER_END_RING,
+        pygame.draw.rect(self.screen, render_config.RENDER_END_RING,
                          (corner_px[0], corner_px[1], side_px, side_px),
-                         config.RENDER_END_RING_PX)
+                         render_config.RENDER_END_RING_PX)
 
     def _draw_hud(self, lines):
         """The status strip under the maze: what is drawn, and which key does what."""
         strip = (0, self.screen.get_height() - self.hud_px,
                  self.screen.get_width(), self.hud_px)
-        pygame.draw.rect(self.screen, config.RENDER_HUD_BACKGROUND, strip)
+        pygame.draw.rect(self.screen, render_config.RENDER_HUD_BACKGROUND, strip)
         if self.font is None:
             return
-        y = strip[1] + (self.hud_px - len(lines) * config.RENDER_HUD_LINE_PX) / 2.0
+        y = strip[1] + (self.hud_px - len(lines) * render_config.RENDER_HUD_LINE_PX) / 2.0
         for line in lines:
-            self.screen.blit(self.font.render(line, True, config.RENDER_HUD_TEXT),
+            self.screen.blit(self.font.render(line, True, render_config.RENDER_HUD_TEXT),
                              (self.offset, y))
-            y += config.RENDER_HUD_LINE_PX
+            y += render_config.RENDER_HUD_LINE_PX
 
     def _draw_heading_arrow(self, cell, side):
         """Point an arrow out of a cell along a compass side.
@@ -275,10 +276,10 @@ class Renderer:
             self._px(tip_mm[0] - dx * barb_mm + dy * barb_mm,
                      tip_mm[1] - dy * barb_mm - dx * barb_mm),
         ]
-        pygame.draw.line(self.screen, config.RENDER_HEADING_ARROW,
+        pygame.draw.line(self.screen, render_config.RENDER_HEADING_ARROW,
                          self._px(centre_mm[0] - dx * reach_mm, centre_mm[1] - dy * reach_mm),
-                         self._px(*tip_mm), config.RENDER_HEADING_ARROW_PX)
-        pygame.draw.polygon(self.screen, config.RENDER_HEADING_ARROW, head)
+                         self._px(*tip_mm), render_config.RENDER_HEADING_ARROW_PX)
+        pygame.draw.polygon(self.screen, render_config.RENDER_HEADING_ARROW, head)
 
     def _fill_cell(self, cell, colour):
         """Paint one cell's interior, stopping short of the post corners."""

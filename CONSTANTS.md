@@ -188,9 +188,8 @@ repository and every `mpremote` path reads the same on either side.
 
 ## Render and editor
 
-PC-only. `sim/renderer.py` and `sim/route_editor.py` are the only readers and
-neither goes on the board. They live here so invariant 5 holds without an
-exception, not because the Pico will ever read them. All CHOSEN unless marked.
+PC-only. They live in `sim/render_config.py`, which `sim/renderer.py` and
+`sim/route_editor.py` read. None goes on the board. All CHOSEN unless marked.
 
 **Scale:** `PX_PER_MM` (0.25) is a FALLBACK only. The Renderer picks its own
 scale per maze and stores it on the instance, so pixels stay inside the
@@ -218,7 +217,8 @@ visits: `RENDER_ROUTE_LINE_PX` 5, `RENDER_ROUTE_ARROW_FRACTION` 0.16,
 
 **Editor:** `ROUTE_EDITOR_REJECT_FLASH_S` 0.6,
 `ROUTE_EDITOR_DEFAULT_COLS` 3 and `ROUTE_EDITOR_DEFAULT_ROWS` 3 (the physical
-test maze), `ROUTE_EDITOR_START_HEADING` `"n"`.
+test maze). `ROUTE_EDITOR_START_HEADING` `"n"` stays in `config.py`, because
+`modes/follow_route.py` reads it.
 
 ## Before and after a bench run
 

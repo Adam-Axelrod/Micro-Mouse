@@ -16,6 +16,7 @@ if PACKAGE_DIR not in sys.path:
 from brain import commands
 import config
 from brain import maze
+from sim import render_config
 
 try:
     import pygame  # noqa: F401
@@ -181,8 +182,8 @@ def test_the_start_and_end_are_the_first_and_last_cells():
     for cell in ((0, 0), (0, 1), (1, 1)):
         editor.click(cell)
     assert editor.start == (0, 0) and editor.end == (1, 1)
-    assert editor.highlight()[(0, 0)] == config.RENDER_TILE_START
-    assert editor.highlight()[(1, 1)] == config.RENDER_TILE_END
+    assert editor.highlight()[(0, 0)] == render_config.RENDER_TILE_START
+    assert editor.highlight()[(1, 1)] == render_config.RENDER_TILE_END
     assert editor.heading_marks() == {(0, 0): "n"}
     print("✓ test_the_start_and_end_are_the_first_and_last_cells passed")
 

@@ -53,6 +53,7 @@ from brain import commands  # noqa: E402
 import config  # noqa: E402
 import files  # noqa: E402
 from brain import maze  # noqa: E402
+from sim import render_config  # noqa: E402
 from sim import renderer  # noqa: E402
 
 
@@ -139,7 +140,7 @@ class RouteEditor:
 
     def reject(self, cell, reason):
         self.reject_cell = cell
-        self.reject_until_s = time.time() + config.ROUTE_EDITOR_REJECT_FLASH_S
+        self.reject_until_s = time.time() + render_config.ROUTE_EDITOR_REJECT_FLASH_S
         print("refused {}: {}".format(cell, reason))
 
     def rotate_start_heading(self):
@@ -210,11 +211,11 @@ class RouteEditor:
         """Cells the renderer should paint over the route body: {cell: colour}."""
         marks = {}
         if self.route:
-            marks[self.end] = config.RENDER_TILE_END
-            marks[self.start] = config.RENDER_TILE_START   # start wins a 1-cell route
+            marks[self.end] = render_config.RENDER_TILE_END
+            marks[self.start] = render_config.RENDER_TILE_START   # start wins a 1-cell route
         if self.reject_cell is not None:
             if time.time() < self.reject_until_s:
-                marks[self.reject_cell] = config.RENDER_TILE_REJECT
+                marks[self.reject_cell] = render_config.RENDER_TILE_REJECT
             else:
                 self.reject_cell = None
         return marks
@@ -232,7 +233,7 @@ def load_maze(maze_path=None, size=None):
     """
     if maze_path:
         return maze.MazeStructure(*maze.num_file_import(maze_path)), maze_path.rsplit("/", 1)[-1]
-    cols, rows = size or (config.ROUTE_EDITOR_DEFAULT_COLS, config.ROUTE_EDITOR_DEFAULT_ROWS)
+    cols, rows = size or (render_config.ROUTE_EDITOR_DEFAULT_COLS, render_config.ROUTE_EDITOR_DEFAULT_ROWS)
     return maze.MazeStructure(cols=cols, rows=rows), "blank{}x{}".format(cols, rows)
 
 
@@ -267,7 +268,7 @@ def main(argv):
     maze_path, size, out_path = parse_args(argv)
     maze_structure, maze_name = load_maze(maze_path, size)
 
-    view = renderer.make_renderer(maze_structure, config.RENDER_HUD_PX)
+    view = renderer.make_renderer(maze_structure, render_config.RENDER_HUD_PX)
     if view is None:
         raise SystemExit("route_editor.py needs a display.")
 

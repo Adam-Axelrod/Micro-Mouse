@@ -121,7 +121,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`files.py`** | `file_exists`: `os.stat` without `os.path`, which MicroPython does not have. Root level beside `config.py`, because every layer needs it. |
 | **`hal/drive.py`** | The motor boundary. `drive_motors` / `stop_motors` / `run_motion_for` / `pivot_for` / `blink_led`, and the motor trace. Everything that moves a wheel goes through here, and nothing here computes a duration. |
 | **`hal/setup.py`** | Hardware pin definitions for motors, reflective sensors, buttons and encoders, plus `read_encoders()`. The single platform boundary. |
-| **`config.py`** | Single source of truth for physical scale (180 mm cells, wheel diameter, track width), timing, render colours, and file paths. |
+| **`config.py`** | Single source of truth for physical scale (180 mm cells, wheel diameter, track width), timing, and file paths. |
 | **`brain/maze.py`** | `MazeStructure` class and `.num` file reader (`num_file_import`) / writer (`num_file_export`). |
 | **`brain/explorer.py`** | Pure `Explorer` class that manages belief maps and steps between cells. |
 | **`brain/search_algorithms.py`** | Pure flood-fill distance transform and greedy descent pathfinding, plus `route_is_open` (the replan trigger). |
@@ -147,6 +147,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`sim/mouse.py`** | `MouseState` continuous pose integration (exact-arc differential drive), encoder tick accumulation, and the phototransistor ADC model. |
 | **`sim/geometry.py`** | `MazeGeometry` mm-space wall segments and post polygons, and the `cast_ray()` engine. |
 | **`sim/renderer.py`** | Optional Pygame renderer, plus `make_renderer()` so no mode has to import another mode in order to draw. |
+| **`sim/render_config.py`** | The constants only the PC window reads: render sizes, colours and route-editor values. |
 | **`sim/replay_log.py`** | Re-drives the sim from a Pico `runs/motor_log.csv`. The gap between the replayed pose and where the robot really stopped is the measurement. |
 | **`sim/route_editor.py`** | Draw a route by clicking cells on any grid size; writes `.mmc` with the start pose and goal in its header. Refuses a step that is not adjacent or that crosses a wall. |
 
