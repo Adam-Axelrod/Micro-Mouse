@@ -65,6 +65,15 @@ assert not os.path.exists("tools"), "the deployment holds a tools/ folder"
 assert "pygame" not in sys.modules, "pygame reached the board"
 assert callable(main.stop_motors), "the CHEATSHEET e-stop is gone"
 
+assert setup.TRACE_BY_DEFAULT and setup.REAL_BOARD
+world = setup.scene(grid=(3, 3), start_pose=(1, 1, "n"), render=True)
+world.show(belief=None, route=None, done=None, animate=False)
+assert world.pose() is None, "the robot has no simulated pose"
+started_ms = setup.now_ms()
+setup.wait(0.01)
+assert setup.diff_ms(setup.now_ms(), started_ms) >= 0
+assert motor_log.MOTOR_TRACE.clock_ms is setup.now_ms
+
 motor_log.start_trace()
 assert motor_log.MOTOR_TRACE.is_recording(), "the trace did not open without a sim"
 drive.drive_motors(0.55, 0.55)

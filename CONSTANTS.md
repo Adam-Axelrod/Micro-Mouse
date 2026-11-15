@@ -188,8 +188,8 @@ repository and every `mpremote` path reads the same on either side.
 
 ## Render and editor
 
-PC-only. They live in `sim/render_config.py`, which `sim/renderer.py` and
-`sim/route_editor.py` read. None goes on the board. All CHOSEN unless marked.
+PC-only. They live in `sim/render_config.py`, which `sim/renderer.py`,
+`sim/scene.py` and `sim/route_editor.py` read. None goes on the board. All CHOSEN unless marked.
 
 **Scale:** `PX_PER_MM` (0.25) is a FALLBACK only. The Renderer picks its own
 scale per maze and stores it on the instance, so pixels stay inside the
@@ -197,7 +197,8 @@ renderer. Reading `PX_PER_MM` outside `sim/renderer.py` is a bug.
 `TILE_PX` is DERIVED from it and `MM_PER_CELL`.
 
 `RENDER_TARGET_WINDOW_PX` 720, `RENDER_MIN_TILE_PX` 24, `RENDER_MAX_TILE_PX` 160,
-`RENDER_MARGIN_PX` 10, `RENDER_FPS` 60, `RENDER_PATH_STEP_DELAY_S` 0.05,
+`RENDER_MARGIN_PX` 10, `RENDER_FPS` 60, `RENDER_EVERY_N_STEPS` 4,
+`RENDER_PATH_STEP_DELAY_S` 0.05,
 `RENDER_DONE_STEP_DELAY_S` 0.025, `RENDER_MOUSE_OUTLINE_PX` 2.
 
 **Colours,** all RGB triples: `RENDER_BACKGROUND`, `RENDER_WALL_KNOWN`,

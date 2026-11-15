@@ -37,8 +37,35 @@ def test_the_boundary_symbols_exist_and_are_callable():
     assert hasattr(drive, "power_listener"), "drive.power_listener is missing"
     assert drive.CRUISE_DUTY_POWER == config.CRUISE_DUTY_POWER
     assert drive.TURN_DUTY_POWER == config.TURN_DUTY_POWER
-    assert isinstance(drive.RENDER_EVERY_N_STEPS, int) and drive.RENDER_EVERY_N_STEPS > 0
     print("✓ test_the_boundary_symbols_exist_and_are_callable passed")
+
+
+def test_setup_exports_time_the_world_and_the_platform_facts():
+    """Everything a mode needs to know about the platform is a name in setup."""
+    for name in ("wait", "now_ms", "diff_ms", "scene", "read_encoders"):
+        assert callable(getattr(setup, name)), f"setup.{name} is missing or not callable"
+    assert isinstance(setup.TRACE_BY_DEFAULT, bool)
+    assert isinstance(setup.REAL_BOARD, bool)
+    print("✓ test_setup_exports_time_the_world_and_the_platform_facts passed")
+
+
+def test_a_motion_takes_the_time_setup_waits():
+    """run_motion_for is `setup.wait`: the clock that setup exports must have
+    moved by at least the duration, whether the platform slept or stepped."""
+    start_ms = setup.now_ms()
+    drive.run_motion_for(0.05)
+    assert setup.diff_ms(setup.now_ms(), start_ms) >= 50
+    print("✓ test_a_motion_takes_the_time_setup_waits passed")
+
+
+def test_the_scene_answers_a_pose_or_none():
+    """The robot's scene has no world: pose() is None and show() does nothing."""
+    world = setup.scene()
+    world.show(belief=None, route=None, done=None, animate=False)
+    pose = world.pose()
+    if pose is not None:
+        assert len(pose) == 3
+    print("✓ test_the_scene_answers_a_pose_or_none passed")
 
 
 def test_forward_power_drives_the_forward_channel_and_parks_reverse():
@@ -140,6 +167,9 @@ def test_a_gentler_pivot_is_timed_longer():
 
 TESTS = [
     test_the_boundary_symbols_exist_and_are_callable,
+    test_setup_exports_time_the_world_and_the_platform_facts,
+    test_a_motion_takes_the_time_setup_waits,
+    test_the_scene_answers_a_pose_or_none,
     test_a_pivot_scales_its_duration_with_the_angle_and_not_its_power,
     test_a_gentler_pivot_is_timed_longer,
     test_forward_power_drives_the_forward_channel_and_parks_reverse,

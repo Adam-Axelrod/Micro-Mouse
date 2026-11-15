@@ -29,7 +29,6 @@ if PACKAGE_DIR not in sys.path:
 
 import config  # noqa: E402
 import files  # noqa: E402
-from brain import maze  # noqa: E402
 from record import motor_log  # noqa: E402
 from hal import setup  # noqa: E402
 
@@ -37,10 +36,14 @@ if setup.sim is None:
     raise SystemExit("replay_log.py is PC-only: there is no simulation to replay into.")
 
 from hal import drive  # noqa: E402  -- the motor boundary, after the sim check
+from sim import render_config  # noqa: E402
 
 
-def replay(records, render_object=None, belief=None):
-    """Drive the sim from a parsed trace. Returns the final MouseState."""
+def replay(records, scene=None):
+    """Drive the sim from a parsed trace, drawing through `scene` if given.
+
+    Returns the final MouseState.
+    """
     mouse_state = setup.sim.get_mouse_state()
     dt = config.SIM_TIMESTEP_S
 
@@ -57,8 +60,8 @@ def replay(records, render_object=None, belief=None):
 
         for step_index in range(max(1, round(hold_seconds / dt))):
             setup.sim.step_sim_physics(dt)
-            if render_object is not None and step_index % drive.RENDER_EVERY_N_STEPS == 0:
-                render_object.draw(belief=belief, mouse=mouse_state)
+            if scene is not None and step_index % render_config.RENDER_EVERY_N_STEPS == 0:
+                scene.show()
 
     drive.stop_motors()
     return mouse_state
@@ -80,18 +83,12 @@ def main_cli():
     if not records:
         raise SystemExit("Trace is empty -- nothing to replay.")
 
-    real_maze = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE))
-    setup.sim.set_sim_maze(real_maze)
-
-    render_object = None
-    if enable_render:
-        from sim.renderer import make_renderer
-        render_object = make_renderer(real_maze)
+    scene = setup.scene(render=enable_render)
 
     start = setup.sim.get_mouse_state()
     print(f"start pose: x={start.x_mm:.1f} y={start.y_mm:.1f} heading={start.heading_radians:.3f}")
 
-    final = replay(records, render_object, belief=real_maze)
+    final = replay(records, scene)
 
     print(f"final pose: x={final.x_mm:.1f} y={final.y_mm:.1f} heading={final.heading_radians:.3f}")
     print(f"cell:       {(int(final.x_mm // config.MM_PER_CELL), int(final.y_mm // config.MM_PER_CELL))}")

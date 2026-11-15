@@ -3,22 +3,76 @@
 Identical code runs on Pico and PC:
 - On Pico, MicroPython loads its native C machine module.
 - On PC, Python imports the mock sim_machine.py module.
+
+This file is the platform boundary. It is the one place that knows which of the
+two is running, and it hands every other module what it needs as a name:
+
+    pins and handles    leftFwd, sw1, LED_PIN, ... and read_encoders()
+    time                wait(seconds), now_ms(), diff_ms(new, old)
+    the run's world     scene(map_path, grid, start_pose, render)
+    platform facts      TRACE_BY_DEFAULT, REAL_BOARD
+
+On the robot `wait` sleeps and the clock is the board's. On the PC `wait` steps
+the simulated physics and the clock is simulated time. `scene()` is a stand-in
+that does nothing on the robot, and the simulated world on the PC.
 """
-# The platform probe and the sim import happen HERE and only here: setup.py is
-# the hardware boundary. On PC, `sim` exposes the simulation engine (world
-# loading, physics stepping, true pose); on the Pico it is None and the pin
-# objects below are the real thing.
+# The platform probe and the sim imports happen HERE and only here. On the Pico
+# `sim` is None and the pin objects below are the real thing. On PC `sim` is the
+# mock machine module, and the rest of `sim/` is never imported on the board.
 try:
     from machine import Pin, ADC, PWM
+    import time
     IS_HARDWARE = True   # real MicroPython machine module (Pico)
     sim = None           # no simulation engine on hardware
+
+    wait = time.sleep
+    # MicroPython's tick clock wraps, so it has its own difference. CPython has
+    # neither name, and the deployment check boots this branch there.
+    if hasattr(time, "ticks_ms"):
+        now_ms = time.ticks_ms
+    else:
+        def now_ms():
+            return int(time.monotonic() * 1000.0)
+    if hasattr(time, "ticks_diff"):
+        diff_ms = time.ticks_diff
+    else:
+        def diff_ms(new_ms, old_ms):
+            return new_ms - old_ms
+
+    class _NullScene:
+        """The robot has no world to draw or to place the mouse in."""
+
+        def show(self, belief=None, route=None, done=None, animate=False):
+            pass
+
+        def pose(self):
+            return None
+
+    def scene(map_path=None, grid=None, start_pose=None, render=False):
+        """The run's world. On the robot, a scene whose methods do nothing."""
+        return _NullScene()
+
+    # A hardware run has no window, so the motor trace is its only record.
+    TRACE_BY_DEFAULT = True
+    # The pins drive a real board.
+    REAL_BOARD = True
 except ImportError:
     # PC only. `sim` is the package of never-deployed modules; `sim.sim_machine`
     # is the mock inside it, and it is what the rest of the project calls
     # `setup.sim`.
     from sim import sim_machine as sim
     from sim.sim_machine import Pin, ADC, PWM
+    from sim import scene as _sim_scene
     IS_HARDWARE = False  # PC: the sim engine stands in for the hardware
+
+    wait = _sim_scene.wait
+    now_ms = _sim_scene.now_ms
+    diff_ms = _sim_scene.diff_ms
+    scene = _sim_scene.Scene
+
+    # On the PC a trace costs a file for nothing, so `--log` asks for one.
+    TRACE_BY_DEFAULT = False
+    REAL_BOARD = False
 
 # Motor PWM pins (2 PWM channels per motor; active low: 65535 = OFF, lower = faster)
 leftFwd = PWM(Pin(3))

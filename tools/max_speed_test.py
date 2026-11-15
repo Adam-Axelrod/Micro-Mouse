@@ -41,7 +41,6 @@ import gc
 import math
 import time
 
-from hal import clock
 import config
 import files
 from hal import drive
@@ -50,11 +49,9 @@ import motion
 from brain import maze
 from hal import setup
 
-HAS_SIM = setup.sim is not None
-
-# Whichever clock this target runs on. `clock` owns the choice.
-_now_ms = clock.now_ms
-_diff_ms = clock.diff_ms
+# Whichever clock this target runs on. `setup` owns the choice.
+_now_ms = setup.now_ms
+_diff_ms = setup.diff_ms
 
 
 LOG_FORMAT_VERSION = 2
@@ -140,8 +137,8 @@ def _drive_sampled(power, commanded_seconds, has_encoders):
       * With no decoder there is nothing to poll, so the dash runs as one
         uninterrupted sleep exactly as it did before.
 
-    On the PC `drive.run_motion_for` steps sim physics instead of sleeping, and
-    `_now_ms` is already the sim clock, so the same loop times both targets.
+    `setup.wait` sleeps on the robot and steps the simulated physics on the PC,
+    and `_now_ms` is the matching clock, so the same loop times both targets.
     """
     interval_ms = config.MAX_SPEED_SAMPLE_INTERVAL_MS
     capacity = config.MAX_SPEED_SAMPLE_LIMIT
@@ -167,12 +164,9 @@ def _drive_sampled(power, commanded_seconds, has_encoders):
             if deadline_ms > total_ms:
                 deadline_ms = total_ms
 
-            if HAS_SIM:
-                drive.run_motion_for((deadline_ms - elapsed_ms) / 1000.0)
-            else:
-                remaining_ms = deadline_ms - _diff_ms(_now_ms(), start_ms)
-                if remaining_ms > 0:
-                    time.sleep(remaining_ms / 1000.0)
+            remaining_ms = deadline_ms - _diff_ms(_now_ms(), start_ms)
+            if remaining_ms > 0:
+                setup.wait(remaining_ms / 1000.0)
             elapsed_ms = deadline_ms
 
             if count < capacity:
@@ -347,6 +341,7 @@ def run(distance_mm=None, power=None, enable_render=False):
     """Drive one straight dash at full duty, brake hard, and report the timing."""
     distance_mm, power, assumed_speed_mms, commanded_seconds = plan(distance_mm, power)
     motor_log.start_trace()
+    scene = setup.scene()
 
     print("=== MAX SPEED TEST ===")
     print("Clear a straight lane of at least {:.2f} m.".format((distance_mm + 500.0) / 1000.0))
@@ -427,9 +422,9 @@ def run(distance_mm=None, power=None, enable_render=False):
             sample_count, config.MAX_SPEED_SAMPLE_LOG_PATH))
         report_ramp()
 
-    if HAS_SIM:
-        state = setup.sim.get_mouse_state()
-        travelled_mm = state.y_mm - config.MM_PER_CELL / 2.0
+    pose = scene.pose()
+    if pose is not None:
+        travelled_mm = pose[1] - config.MM_PER_CELL / 2.0
         print("Sim travelled {:.0f} mm of the {:.0f} mm commanded ({:+.1f}%).".format(
             travelled_mm, distance_mm, (travelled_mm / distance_mm - 1.0) * 100.0))
         print("  The sim drives at SIM_TRUE_WHEEL_SPEED_MMS and plans at")

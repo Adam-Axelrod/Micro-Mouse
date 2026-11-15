@@ -23,9 +23,8 @@ import config
 # travels with it, and MicroPython has no namespace packages to paper over the
 # one that got left behind.
 DEPLOYMENT_SET = (
-    "main.py", "config.py", "files.py", "motion.py", "world.py",
-    "hal/__init__.py", "hal/setup.py", "hal/drive.py", "hal/clock.py",
-    "hal/encoders.py",
+    "main.py", "config.py", "files.py", "motion.py",
+    "hal/__init__.py", "hal/setup.py", "hal/drive.py", "hal/encoders.py",
     "record/__init__.py", "record/motor_log.py", "record/lap_log.py",
     "brain/__init__.py", "brain/maze.py", "brain/explorer.py",
     "brain/search_algorithms.py", "brain/commands.py",
@@ -53,7 +52,7 @@ LAYERS = {
     # D-016 as a test: `modes` is absent from this set, so no mode may import
     # another mode. A mode that wants a driver takes `hal.drive`, and a mode
     # that wants the executor takes `motion`.
-    "modes": {"brain", "hal", "motion", "record", "sim", "world"},
+    "modes": {"brain", "hal", "motion", "record"},
     # The REPL instruments drive and measure. `tools` is absent from the sets
     # above, so no mode and no layer may import one.
     "tools": {"brain", "hal", "motion", "record", "tools"},
@@ -323,6 +322,99 @@ def test_only_setup_probes_the_platform():
     print("\u2713 test_only_setup_probes_the_platform passed")
 
 
+# Names that say which platform is running. Only the platform boundary may read them.
+PLATFORM_NAMES = ("HAS_SIM", "IS_HARDWARE")
+
+
+def _every_source_file():
+    """Every .py file of the repository, as a path relative to PACKAGE_DIR."""
+    found = []
+    for root, dirs, names in os.walk(PACKAGE_DIR):
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("__pycache__", "runs")]
+        for name in names:
+            if name.endswith(".py"):
+                found.append(os.path.relpath(os.path.join(root, name), PACKAGE_DIR))
+    return sorted(found)
+
+
+def _platform_checks(source, filename="<source>"):
+    """Where `source` asks which platform runs: HAS_SIM, IS_HARDWARE or `setup.sim`."""
+    hits = []
+    for node in ast.walk(ast.parse(source, filename=filename)):
+        if isinstance(node, ast.Name) and node.id in PLATFORM_NAMES:
+            hits.append((node.lineno, node.id))
+        elif isinstance(node, ast.Attribute) and node.attr in PLATFORM_NAMES:
+            hits.append((node.lineno, node.attr))
+        elif (isinstance(node, ast.Attribute) and node.attr == "sim"
+              and isinstance(node.value, ast.Name) and node.value.id == "setup"):
+            hits.append((node.lineno, "setup.sim"))
+        elif isinstance(node, ast.ImportFrom) and node.module in ("hal.setup", "setup"):
+            hits += [(node.lineno, alias.name) for alias in node.names
+                     if alias.name in PLATFORM_NAMES + ("sim",)]
+    return sorted(hits)
+
+
+def _names_in_source(path, names):
+    """Lines of `path` that use any of `names` as an identifier."""
+    with open(os.path.join(PACKAGE_DIR, path)) as handle:
+        tree = ast.parse(handle.read(), filename=path)
+    hits = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in names:
+            hits.append((node.lineno, node.id))
+        elif isinstance(node, ast.arg) and node.arg in names:
+            hits.append((node.lineno, node.arg))
+        elif isinstance(node, ast.keyword) and node.arg in names:
+            hits.append((node.value.lineno, node.arg))
+        elif isinstance(node, ast.Attribute) and node.attr in names:
+            hits.append((node.lineno, node.attr))
+    return sorted(hits)
+
+
+def test_only_the_boundary_asks_which_platform_runs():
+    """HAS_SIM, IS_HARDWARE and `setup.sim` stay in hal/setup.py, main.py, sim/ and tests/.
+
+    Every other module needs a platform FACT, and asks setup for it by name:
+    `setup.wait`, `setup.scene`, `setup.read_encoders`, `setup.TRACE_BY_DEFAULT`.
+    A module that tests for the simulator has to be edited when the simulator
+    changes, and that is how 38 checks spread over nine files.
+    """
+    allowed = ("hal/setup.py", "main.py")
+    offenders = []
+    for path in _every_source_file():
+        if path in allowed or path.startswith(("sim/", "tests/")):
+            continue
+        with open(os.path.join(PACKAGE_DIR, path)) as handle:
+            for line, name in _platform_checks(handle.read(), path):
+                offenders.append("{}:{} reads {}".format(path, line, name))
+    assert not offenders, offenders
+    print("\u2713 test_only_the_boundary_asks_which_platform_runs passed")
+
+
+def test_the_platform_check_finds_what_it_is_meant_to_find():
+    """Proves the check above can fail: each form of the test is caught."""
+    for source in ("HAS_SIM = setup.sim is not None",
+                   "if setup.IS_HARDWARE:\n    pass",
+                   "from hal.setup import IS_HARDWARE",
+                   "x = setup.sim.get_mouse_state()"):
+        assert _platform_checks(source), source
+    assert not _platform_checks("setup.wait(1)\nsetup.scene().pose()\nsim = 3"), \
+        "a name that is not a platform check was flagged"
+    print("\u2713 test_the_platform_check_finds_what_it_is_meant_to_find passed")
+
+
+def test_the_renderer_stays_inside_sim():
+    """The motor boundary and the executor carry no renderer: `render_object` is sim/ and tests/ only."""
+    offenders = []
+    for path in _every_source_file():
+        if path.startswith(("sim/", "tests/")):
+            continue
+        for line, name in _names_in_source(path, ("render_object", "make_renderer")):
+            offenders.append("{}:{} uses {}".format(path, line, name))
+    assert not offenders, offenders
+    print("\u2713 test_the_renderer_stays_inside_sim passed")
+
+
 def test_documented_paths_point_somewhere_real():
     for name in ("DEFAULT_MAZE", "MAZES_DIR", "ROUTES_DIR"):
         assert os.path.exists(getattr(config, name)), name
@@ -405,6 +497,9 @@ TESTS = (
     test_tools_are_not_imported_at_module_scope,
     test_pygame_stays_inside_sim,
     test_only_setup_probes_the_platform,
+    test_only_the_boundary_asks_which_platform_runs,
+    test_the_platform_check_finds_what_it_is_meant_to_find,
+    test_the_renderer_stays_inside_sim,
     test_documented_paths_point_somewhere_real,
     test_committed_fixtures_parse,
     test_working_files_are_not_tracked,

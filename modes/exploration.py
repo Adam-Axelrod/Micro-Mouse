@@ -11,14 +11,6 @@ from brain import search_algorithms
 from hal import setup
 from brain.explorer import Explorer
 
-try:
-    from sim.renderer import make_renderer
-except ImportError:
-    def make_renderer(real_maze):
-        return None
-
-HAS_SIM = setup.sim is not None
-
 
 def read_walls(real_maze, current_position):
     """Read true wall presence around current cell.
@@ -44,13 +36,10 @@ def run(enable_render=False, save_belief_path=None):
 
     real_maze = maze.MazeStructure(*maze.num_file_import(config.DEFAULT_MAZE))
 
-    if HAS_SIM:
-        setup.sim.set_sim_maze(real_maze)
+    scene = setup.scene(render=enable_render)
 
     belief = maze.MazeStructure(cols=real_maze.cols, rows=real_maze.rows)
     explorer_robot = Explorer(belief_map=belief)
-
-    render_object = make_renderer(real_maze) if enable_render else None
 
     route = []
 
@@ -71,15 +60,8 @@ def run(enable_render=False, save_belief_path=None):
                 explorer_robot.belief_map, explorer_robot.pos
             )
 
-        if render_object is not None:
-            mouse_st = setup.sim.get_mouse_state() if HAS_SIM else None
-            render_object.draw(
-                belief=explorer_robot.belief_map,
-                mouse=mouse_st,
-                path=route,
-                done=explorer_robot.path_done,
-                animate=replanned
-            )
+        scene.show(belief=explorer_robot.belief_map, route=route,
+                   done=explorer_robot.path_done, animate=replanned)
 
         if len(route) < 2:
             break
@@ -87,8 +69,7 @@ def run(enable_render=False, save_belief_path=None):
         explorer_robot.path_to_execute = [route[1]]
         while explorer_robot.path_to_execute:
             explorer_robot.step()
-            if HAS_SIM:
-                setup.sim.step_sim_physics(config.SIM_TIMESTEP_S)
+            setup.wait(config.SIM_TIMESTEP_S)
 
     if save_belief_path is None:
         save_belief_path = config.SAVED_BELIEF_MAZE

@@ -37,15 +37,12 @@ def cleanup():
         os.remove(TRACE_PATH)
 
 
-def test_the_trace_uses_the_sim_clock_not_the_wall_clock():
+def test_the_trace_uses_the_clock_that_setup_exports():
     """On the PC the drive routines step physics instead of sleeping, so wall
     time barely moves. A wall-clocked trace lands every record on one
-    millisecond and replays as an instantaneous run."""
-    if setup.sim is None:
-        print("✓ test_the_trace_uses_the_sim_clock_not_the_wall_clock skipped (no sim)")
-        return
-    assert motor_log.MOTOR_TRACE.clock_ms is setup.sim.sim_time_ms
-    print("✓ test_the_trace_uses_the_sim_clock_not_the_wall_clock passed")
+    millisecond and replays as an instantaneous run. setup owns the choice."""
+    assert motor_log.MOTOR_TRACE.clock_ms is setup.now_ms
+    print("✓ test_the_trace_uses_the_clock_that_setup_exports passed")
 
 
 def test_start_trace_writes_a_resting_baseline_and_is_idempotent():
@@ -142,17 +139,14 @@ def test_driving_without_a_trace_is_silent_not_an_error():
     print("✓ test_driving_without_a_trace_is_silent_not_an_error passed")
 
 
-def test_start_trace_without_force_stays_off_when_a_sim_is_present():
+def test_start_trace_without_force_follows_the_default_that_setup_names():
     """On the Pico the trace is on by default, because a run is otherwise
     invisible. On the PC it costs a file for nothing unless --log asks."""
     motor_log.stop_trace()
     motor_log.start_trace()
-    if setup.sim is None:
-        assert motor_log.MOTOR_TRACE.is_recording(), "hardware runs must always trace"
-    else:
-        assert not motor_log.MOTOR_TRACE.is_recording()
+    assert motor_log.MOTOR_TRACE.is_recording() == setup.TRACE_BY_DEFAULT
     cleanup()
-    print("✓ test_start_trace_without_force_stays_off_when_a_sim_is_present passed")
+    print("✓ test_start_trace_without_force_follows_the_default_that_setup_names passed")
 
 
 def test_the_trace_is_the_drive_power_listener_while_it_is_open():
@@ -181,7 +175,7 @@ def test_the_log_path_is_config_owned():
 
 
 TESTS = [
-    test_the_trace_uses_the_sim_clock_not_the_wall_clock,
+    test_the_trace_uses_the_clock_that_setup_exports,
     test_start_trace_writes_a_resting_baseline_and_is_idempotent,
     test_only_changed_powers_are_recorded,
     test_the_trace_records_the_clamped_power_the_motors_actually_got,
@@ -189,7 +183,7 @@ TESTS = [
     test_a_pivot_is_traced_as_a_turn_then_a_stop,
     test_an_anticlockwise_pivot_reverses_the_pair,
     test_driving_without_a_trace_is_silent_not_an_error,
-    test_start_trace_without_force_stays_off_when_a_sim_is_present,
+    test_start_trace_without_force_follows_the_default_that_setup_names,
     test_the_trace_is_the_drive_power_listener_while_it_is_open,
     test_the_log_path_is_config_owned,
 ]

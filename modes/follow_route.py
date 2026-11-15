@@ -30,7 +30,6 @@ import time
 
 from brain import commands
 from brain import maze
-from hal import clock
 import config
 import files
 from hal import drive
@@ -38,9 +37,6 @@ from record import lap_log
 from record import motor_log
 import motion
 from hal import setup
-import world
-
-HAS_SIM = setup.sim is not None
 
 
 def _load_route(route_path, laps, retrace=False):
@@ -101,6 +97,10 @@ def _load_route(route_path, laps, retrace=False):
     return movement_commands, header
 
 
+def _elapsed_s(since_ms):
+    return setup.diff_ms(setup.now_ms(), since_ms) / 1000.0
+
+
 def _lap_record(lap, started_ms, ticks_before, commanded_deg_per_lap, sample_light):
     """Everything measurable about one finished lap, while the brake is held."""
     ticks = setup.read_encoders()
@@ -114,7 +114,7 @@ def _lap_record(lap, started_ms, ticks_before, commanded_deg_per_lap, sample_lig
             residual_deg = measured_deg - commanded_deg_per_lap
     return {
         "lap": lap,
-        "elapsed_s": clock.elapsed_s(started_ms),
+        "elapsed_s": _elapsed_s(started_ms),
         "ticks": ticks,
         "deltas": deltas,
         "residual_deg": residual_deg,
@@ -184,9 +184,8 @@ def run(route_path=None, map_path=None, laps=None, enable_render=False,
     motor_log.start_trace()
     drive.blink_led(4, 80)
 
-    render_object, real_maze = world.sim_world(map_path, enable_render,
-                                               grid=header.get("grid"),
-                                               start_pose=header.get("start"))
+    scene = setup.scene(map_path, header.get("grid"), header.get("start"),
+                        enable_render)
 
     ticks_before = setup.read_encoders(reset=True)
     if ticks_before is None:
@@ -215,9 +214,8 @@ def run(route_path=None, map_path=None, laps=None, enable_render=False,
     for lap in range(1, laps + 1):
         if laps > 1:
             print("--- lap {} of {}".format(lap, laps))
-        started_ms = clock.now_ms()
-        motion.execute(movement_commands, render_object, real_maze, None,
-                       power, turn_power)
+        started_ms = setup.now_ms()
+        motion.execute(movement_commands, power, turn_power)
         drive.stop_motors()
 
         record = _lap_record(lap, started_ms, ticks_before, commanded_deg_per_lap,
@@ -240,7 +238,7 @@ def run(route_path=None, map_path=None, laps=None, enable_render=False,
         log.close()
         print("Wrote {} lap row(s) to {}.".format(log.rows_written, log.path))
 
-    _report_drift(len(records), movement_commands, header.get("start"))
+    _report_drift(scene, len(records), movement_commands, header.get("start"))
     if len(records) > 1:
         _report_laps(records, aborted, laps)
     return movement_commands
@@ -329,7 +327,7 @@ def _report_route_pose(header):
             header["grid"][0], header["grid"][1], header.get("maze", "unnamed")))
 
 
-def _report_drift(laps, movement_commands, start_pose=None):
+def _report_drift(scene, laps, movement_commands, start_pose=None):
     """Say where the run ended up, by whichever measure is available.
 
     The wheel differential is TOTAL TURNING, not error: a lap with four right
@@ -350,13 +348,14 @@ def _report_drift(laps, movement_commands, start_pose=None):
         print("  HEADING RESIDUAL: {:+.1f} deg over {} lap(s)".format(
             measured_deg - commanded_deg, laps))
 
-    if HAS_SIM:
-        state = setup.sim.get_mouse_state()
+    pose = scene.pose()
+    if pose is not None:
+        x_mm, y_mm, heading_radians = pose
         start_cell = start_pose[:2] if start_pose else config.START_POS
         start_x = (start_cell[0] + 0.5) * config.MM_PER_CELL
         start_y = (start_cell[1] + 0.5) * config.MM_PER_CELL
         print("Sim pose: x {:.0f} mm, y {:.0f} mm, heading {:.1f} deg".format(
-            state.x_mm, state.y_mm, math.degrees(state.heading_radians)))
+            x_mm, y_mm, math.degrees(heading_radians)))
         print("  offset from start: {:.0f} mm".format(
-            ((state.x_mm - start_x) ** 2 + (state.y_mm - start_y) ** 2) ** 0.5))
+            ((x_mm - start_x) ** 2 + (y_mm - start_y) ** 2) ** 0.5))
         print("  (the sim has no acceleration ramp, so its offset is optimistic)")

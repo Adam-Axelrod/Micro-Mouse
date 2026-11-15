@@ -29,8 +29,8 @@ Minimal deployment set (`AGENTS.md` §Dual-target constraint). Anything importin
 or `geometry` must never go on the board:
 
 ```
-main.py config.py files.py motion.py world.py
-hal/__init__.py hal/setup.py hal/drive.py hal/clock.py hal/encoders.py
+main.py config.py files.py motion.py
+hal/__init__.py hal/setup.py hal/drive.py hal/encoders.py
 record/__init__.py record/motor_log.py record/lap_log.py
 brain/__init__.py brain/maze.py brain/explorer.py brain/search_algorithms.py
 brain/commands.py
@@ -46,7 +46,7 @@ ones.** Make each on the board before you copy into it, and copy the
 for an on-device fault.
 
 Four packages, four rules. `hal/` is the board: the platform probe, the pins,
-the motors, the clock. `record/` is what a run wrote down. `brain/` is pure
+the motors, the time. `record/` is what a run wrote down. `brain/` is pure
 cells and headings. `modes/` is one module per mode, and no mode imports
 another. `tools/` holds the two REPL instruments, optional on the board. `config.py` and `files.py` stay at root because every layer reads them
 and neither is a layer's business.
@@ -73,9 +73,9 @@ mpremote mkdir :record
 mpremote mkdir :brain
 mpremote mkdir :modes
 mpremote mkdir :runs
-mpremote cp main.py config.py files.py motion.py world.py :
+mpremote cp main.py config.py files.py motion.py :
 mpremote cp runs/belief.num runs/route.mmc :runs/
-mpremote cp hal/__init__.py hal/setup.py hal/drive.py hal/clock.py hal/encoders.py :hal/
+mpremote cp hal/__init__.py hal/setup.py hal/drive.py hal/encoders.py :hal/
 mpremote cp record/__init__.py record/motor_log.py record/lap_log.py :record/
 mpremote cp brain/__init__.py brain/maze.py brain/explorer.py brain/search_algorithms.py brain/commands.py :brain/
 mpremote cp modes/__init__.py modes/exploration.py modes/speed_run.py modes/follow_route.py :modes/

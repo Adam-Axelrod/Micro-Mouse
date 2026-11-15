@@ -22,13 +22,8 @@ import time
 import config
 from hal import setup
 
-HAS_SIM = setup.sim is not None
-
 CRUISE_DUTY_POWER = config.CRUISE_DUTY_POWER
 TURN_DUTY_POWER = config.TURN_DUTY_POWER
-
-# Draw one frame in this many physics steps. Render-only; it never gates physics.
-RENDER_EVERY_N_STEPS = 4
 
 # Full 16-bit duty. Active-low drive, so this value is a channel OFF.
 MAX_DUTY = 65535
@@ -86,36 +81,12 @@ def stop_motors():
     setup.rightRev.duty_u16(MAX_DUTY)
 
 
-def run_motion_for(duration_seconds, render_object=None, belief=None, route=None):
-    """Let time pass while the motors drive.
-
-    On the Pico this sleeps. On the PC it steps the sim instead, so wall-clock
-    time and sim time diverge completely.
-    """
-    if not HAS_SIM:
-        time.sleep(duration_seconds)
-        return
-
-    dt = config.SIM_TIMESTEP_S
-    # Whole steps plus the leftover. Rounding to whole steps instead put a
-    # systematic error on every short move -- a 0.216 s pivot became 0.22 s and
-    # turned 91.6 degrees -- which would show up as sim/hardware divergence that
-    # the hardware had not actually caused.
-    total_steps = int(duration_seconds / dt)
-    remainder = duration_seconds - total_steps * dt
-    for step_index in range(total_steps):
-        setup.sim.step_sim_physics(dt)
-        if render_object is not None and (
-            step_index % RENDER_EVERY_N_STEPS == 0 or step_index == total_steps - 1
-        ):
-            render_object.draw(belief=belief, mouse=setup.sim.get_mouse_state(), path=route)
-
-    if remainder > 0.0:
-        setup.sim.step_sim_physics(remainder)
+def run_motion_for(duration_seconds):
+    """Let time pass while the motors drive: `setup.wait`, whichever platform runs."""
+    setup.wait(duration_seconds)
 
 
-def pivot_for(seconds, clockwise=True, render_object=None, belief=None,
-              route=None, power=None):
+def pivot_for(seconds, clockwise=True, power=None):
     """Spin on the spot for `seconds` at `power`. Actuation only.
 
     The DURATION is computed by `motion.py`, which is the one place a distance
@@ -127,5 +98,5 @@ def pivot_for(seconds, clockwise=True, render_object=None, belief=None,
         power = TURN_DUTY_POWER
     sign = 1.0 if clockwise else -1.0
     drive_motors(sign * power, -sign * power)
-    run_motion_for(seconds, render_object, belief, route)
+    run_motion_for(seconds)
     stop_motors()

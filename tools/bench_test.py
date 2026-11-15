@@ -258,8 +258,8 @@ def bt0_boot():
     print("")
     print("== BT-0  boot and indicators ==")
 
-    if not setup.IS_HARDWARE:
-        _record("BT-0.platform", "FAIL", "setup.IS_HARDWARE is False -- this is the PC sim")
+    if not setup.REAL_BOARD:
+        _record("BT-0.platform", "FAIL", "setup.REAL_BOARD is False -- this is the PC sim")
         return
     _record("BT-0.platform", "PASS", "MicroPython machine module present")
 

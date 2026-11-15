@@ -13,9 +13,10 @@ RENDER_TARGET_WINDOW_PX = 720     # longest window edge the renderer aims for (p
 RENDER_MIN_TILE_PX = 24           # below this a cell is unclickable (px)
 RENDER_MAX_TILE_PX = 160          # above this a 3x3 fills the screen for nothing (px)
 
-# Window and animation. Only sim/renderer.py reads them.
+# Window and animation. Only sim/renderer.py and sim/scene.py read them.
 RENDER_MARGIN_PX = 10            # blank border around the maze (px)
 RENDER_FPS = 60                  # display throttle, never gates physics (fps)
+RENDER_EVERY_N_STEPS = 4         # physics steps between two drawn frames; never gates physics (steps)
 RENDER_PATH_STEP_DELAY_S = 0.05  # per-cell delay when animating a planned route (s)
 RENDER_DONE_STEP_DELAY_S = 0.025 # per-cell delay when animating the walked path (s)
 RENDER_MOUSE_OUTLINE_PX = 2      # chassis outline and nose line width (px)

@@ -5,7 +5,7 @@ records every commanded motor power to a file on the Pico's own filesystem; copy
 it to the PC afterwards and `replay_log.py` re-drives the simulation from it, so
 a real run can be watched in the sim that could not observe it live.
 
-Pico-portable: `clock`, `drive`, `setup`, `config`, `files` only, no os.path, no f-string-free
+Pico-portable: `drive`, `setup`, `config`, `files` only, no os.path, no f-string-free
 constraints beyond what the rest of the deployment set already assumes.
 
 Format (v1), one header block then one record per line:
@@ -26,7 +26,6 @@ holds a power for the whole of each verb, so a full speed run is a few dozen
 lines. Replay therefore holds each power until the next timestamp.
 """
 
-from hal import clock
 from hal import drive
 from hal import setup
 import config
@@ -40,9 +39,9 @@ class MotorLog:
 
     def __init__(self, path_str, power_epsilon=None, clock_ms=None):
         self.path_str = path_str
-        # Defaults to the project clock, which knows the target: wall time on the
-        # Pico, sim time on the PC. Injectable so a test can drive a fake clock.
-        self.clock_ms = clock_ms if clock_ms is not None else clock.now_ms
+        # Defaults to the clock that setup exports: wall time on the Pico, sim
+        # time on the PC. Injectable so a test can drive a fake clock.
+        self.clock_ms = clock_ms if clock_ms is not None else setup.now_ms
         # Powers closer together than this count as unchanged. Guards against a
         # float round-trip emitting a record that says nothing.
         self.power_epsilon = (
@@ -78,7 +77,7 @@ class MotorLog:
                     and abs(right_power - last_right) < self.power_epsilon):
                 return
 
-        elapsed_ms = clock.diff_ms(self.clock_ms(), self._start_ticks)
+        elapsed_ms = setup.diff_ms(self.clock_ms(), self._start_ticks)
         self._file.write(f"{elapsed_ms},{left_power:.3f},{right_power:.3f}\n")
         self._last_powers = (left_power, right_power)
         self.records_written += 1
@@ -90,24 +89,21 @@ class MotorLog:
         self._file = None
 
 
-MOTOR_TRACE = MotorLog(
-    config.MOTOR_LOG_PATH,
-    clock_ms=setup.sim.sim_time_ms if setup.sim is not None else None,
-)
+MOTOR_TRACE = MotorLog(config.MOTOR_LOG_PATH)
 
 
 def start_trace(force=False):
     """Begin recording commanded motor powers to config.MOTOR_LOG_PATH.
 
     Idempotent, so a mode may call it without knowing whether `main` already did.
-    On the Pico there is no renderer and no sim, so a run is otherwise invisible
-    and the trace is ON BY DEFAULT; on the PC it costs a file for nothing unless
-    the caller asks for it with `--log`. An open trace is the drive's
+    Where `setup.TRACE_BY_DEFAULT` is true (the Pico, which has no renderer, so a
+    run is otherwise invisible) the trace is ON BY DEFAULT; on the PC it costs a
+    file for nothing unless the caller asks for it with `--log`. An open trace is the drive's
     `power_listener`.
     """
     if MOTOR_TRACE.is_recording():
         return MOTOR_TRACE
-    if force or setup.sim is None:
+    if force or setup.TRACE_BY_DEFAULT:
         MOTOR_TRACE.start()
         # Record the resting state so the first real power change has a baseline
         # to be a change FROM. Without it the trace starts mid-motion.

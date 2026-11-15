@@ -55,19 +55,16 @@ def pivot_seconds(quarter_turns, power=None):
     return (math.pi / 2.0) * quarter_turns / pivot_rate_rads
 
 
-def pivot(quarter_turns, clockwise=True, render_object=None, belief=None,
-          route=None, power=None):
+def pivot(quarter_turns, clockwise=True, power=None):
     """Spin on the spot through `quarter_turns` x 90 degrees at `power`.
 
     The duration is derived from whatever power is actually used, never from a
     different one. That is the same trap as scaling both, in another guise.
     """
-    drive.pivot_for(pivot_seconds(quarter_turns, power), clockwise,
-                    render_object, belief, route, power)
+    drive.pivot_for(pivot_seconds(quarter_turns, power), clockwise, power)
 
 
-def execute(movement_commands, render_object=None, belief=None, route=None,
-            drive_power=None, turn_power=None):
+def execute(movement_commands, drive_power=None, turn_power=None):
     """Execute egocentric movement verbs: (F, n), (L, None), (R, None), (U, None), (H, None).
 
     `drive_power` and `turn_power` let a mode go slower than a speed run.
@@ -79,7 +76,7 @@ def execute(movement_commands, render_object=None, belief=None, route=None,
             seconds = forward_seconds(cells * config.MM_PER_CELL, drive_power)
             power = drive.CRUISE_DUTY_POWER if drive_power is None else drive_power
             drive.drive_motors(power, power)
-            drive.run_motion_for(seconds, render_object, belief, route)
+            drive.run_motion_for(seconds)
             drive.stop_motors()
 
         elif verb in (commands.LEFT, commands.RIGHT, commands.UTURN):
@@ -91,14 +88,14 @@ def execute(movement_commands, render_object=None, belief=None, route=None,
                 quarter_turns, clockwise = 1, True
             else:
                 quarter_turns, clockwise = 2, True
-            pivot(quarter_turns, clockwise, render_object, belief, route, turn_power)
+            pivot(quarter_turns, clockwise, turn_power)
 
         elif verb == commands.HALT:
             drive.stop_motors()
             print("Route completed successfully!")
             break
 
-        drive.run_motion_for(config.INTER_COMMAND_SETTLE_S, render_object, belief, route)
+        drive.run_motion_for(config.INTER_COMMAND_SETTLE_S)
 
 
 def lap_seconds(movement_commands, drive_power=None, turn_power=None):

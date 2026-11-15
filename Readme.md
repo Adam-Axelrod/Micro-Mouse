@@ -48,7 +48,8 @@ Four layers. Each knows the layer below it and nothing above.
  5  PLATFORM BOUNDARY   +--------------------------------------------+
                         |                hal/setup.py                |
                         |  the ONLY "try: from machine import ..."   |
-                        |  every pin, PWM, ADC, read_encoders()      |
+                        |  every pin, PWM, ADC, read_encoders(),     |
+                        |  wait / now_ms / diff_ms, scene()          |
                         +--------------------------------------------+
                               |                       |
                     (Pico)    v                       v    (PC)
@@ -56,16 +57,18 @@ Four layers. Each knows the layer below it and nothing above.
             | MicroPython "machine"  |   |       sim/ package       |
             | real PWM / ADC         |   | sim_machine -> mouse ->  |
             | encoders               |   | geometry; renderer;      |
-            | (PIO quadrature)       |   | replay_log.  NEVER       |
+            | (PIO quadrature)       |   | scene, replay_log. NEVER |
             |                        |   | deployed to the board.   |
             +------------------------+   +--------------------------+
 ```
 
 **The `sim/` rule.** Anything in `sim/` is PC-only and is never copied to the
 Pico. Nothing imports it unconditionally: `hal/setup.py` reaches for
-`sim.sim_machine` only when the real `machine` module is absent, and `world.py`
-guards `sim.renderer` behind a `try/except ImportError`. A board without
-the directory runs headless, which is what it does today.
+`sim.sim_machine` and `sim.scene` only when the real `machine` module is absent,
+and `sim.scene` reaches `sim.renderer` only when a window is asked for. No mode
+and no tool imports `sim`: a mode asks `hal/setup.py` for `wait`, `now_ms`,
+`diff_ms` and `scene()`, and on the board those are `time.sleep`, the tick clock
+and a scene that does nothing. A board without the directory runs headless.
 
 ### Summary
 
@@ -115,10 +118,9 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | :--- | :--- |
 | **`main.py`** | Dispatcher. Registers `MODES`, reads SW1/SW2 or a CLI flag, opens and closes the motor trace around the run. Keeps a `stop_motors` alias for the REPL e-stop. |
 | **`motion.py`** | The motion layer: the ONE place a distance or an angle becomes a duration. `execute` (the verb executor), `forward_seconds`, `pivot_seconds`, `lap_seconds`. Every open-loop error is made here. |
-| **`world.py`** | The one place the sim world and the renderer are set up. Returns `None` on the board, so a mode runs headless. |
 | **`files.py`** | `file_exists`: `os.stat` without `os.path`, which MicroPython does not have. Root level beside `config.py`, because every layer needs it. |
 | **`hal/drive.py`** | The motor boundary. `drive_motors` / `stop_motors` / `run_motion_for` / `pivot_for` / `blink_led`, and the `power_listener` hook that a trace sets. Everything that moves a wheel goes through here, and nothing here computes a duration. |
-| **`hal/setup.py`** | Hardware pin definitions for motors, reflective sensors, buttons and encoders, plus `read_encoders()`. The single platform boundary. |
+| **`hal/setup.py`** | Hardware pin definitions for motors, reflective sensors, buttons and encoders, plus `read_encoders()`. The single platform boundary: it also exports `wait(seconds)`, `now_ms()`, `diff_ms(new, old)`, `scene(map_path, grid, start_pose, render)` and the facts `TRACE_BY_DEFAULT` and `REAL_BOARD`. A test fails when any other file asks which platform runs. |
 | **`config.py`** | Single source of truth for physical scale (180 mm cells, wheel diameter, track width), timing, and file paths. |
 | **`brain/maze.py`** | `MazeStructure` class and `.num` file reader (`num_file_import`) / writer (`num_file_export`). |
 | **`brain/explorer.py`** | Pure `Explorer` class that manages belief maps and steps between cells. |
@@ -130,7 +132,6 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`tools/bench_test.py`** | Mode 3. BT-0..BT-8 bring-up plus BT-9 straight-drive and BT-10 single-pivot floor measurements. Imported lazily by `main.py`; not in the minimal deployment set. |
 | **`tools/max_speed_test.py`** | REPL only, no button mode. One straight dash over a marked distance, sampling the encoders as it goes so the acceleration ramp and terminal speed come out of a single run. Plus `calibrate()`. |
 | **`record/lap_log.py`** | The soak's instrument. One CSV row per lap, and the lit-minus-unlit sensor read. Never raises at the call site: a dead log must not end a twenty minute run. |
-| **`hal/clock.py`** | Which clock a timed run uses. The Pico sleeps and its wall clock is real; the PC steps physics and only the sim clock means anything. |
 | **`record/motor_log.py`** | Change-only CSV trace of commanded motor powers (format v1). Owns `start_trace` / `stop_trace` and `MOTOR_TRACE`. Written on every hardware run, and on `--log` from the PC. |
 | **`hal/encoders.py`** | PIO quadrature encoder counter. Takes its pins from `hal/setup.py` and is reached through `setup.read_encoders()`, never imported directly. |
 | **`mazes/groundtruth.num`** | Default ground-truth maze fixture used by PC simulation. |
@@ -144,6 +145,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`sim/sim_machine.py`** | Mock MicroPython `machine` module (`Pin`, `PWM`, `ADC`). Writing a PWM duty steps the physics instead of driving a pin. It drives at `SIM_TRUE_WHEEL_SPEED_MMS`, deliberately NOT the constant the planner divides by, so a sim run falsifies the planner instead of confirming it. |
 | **`sim/mouse.py`** | `MouseState` continuous pose integration (exact-arc differential drive), encoder tick accumulation, and the phototransistor ADC model. |
 | **`sim/geometry.py`** | `MazeGeometry` mm-space wall segments and post polygons, and the `cast_ray()` engine. |
+| **`sim/scene.py`** | What `setup.scene()` returns on the PC: the maze loaded into the sim, the mouse placed, an optional renderer. `show()` sets what a frame draws, `pose()` reads the pose. Also `wait`, `now_ms` and `diff_ms`, the PC side of setup's time: `wait` steps the physics and draws a frame every `RENDER_EVERY_N_STEPS` steps. |
 | **`sim/renderer.py`** | Optional Pygame renderer, plus `make_renderer()` so no mode has to import another mode in order to draw. |
 | **`sim/render_config.py`** | The constants only the PC window reads: render sizes, colours and route-editor values. |
 | **`sim/replay_log.py`** | Re-drives the sim from a Pico `runs/motor_log.csv`. The gap between the replayed pose and where the robot really stopped is the measurement. |
