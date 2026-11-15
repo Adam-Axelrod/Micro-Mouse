@@ -37,19 +37,19 @@ def test_floor_checks_brake_on_interrupt():
 
 
 def test_checks_isolate_motion_and_measure_after_braking():
-    for check, verb in ((bench_test.bt9_straight_drive, 'F 2'),
-                        (bench_test.bt10_single_pivot, 'R'),
-                        (bench_test.bt10_single_pivot, 'L')):
+    for check, verb in ((bench_test.bt9_straight_drive, ('F', 2)),
+                        (bench_test.bt10_single_pivot, ('R', None)),
+                        (bench_test.bt10_single_pivot, ('L', None))):
         events = []
         def execute(verbs, **kwargs):
-            assert verbs == [verb, 'H'], verbs
+            assert verbs == [verb, ('H', None)], verbs
             assert kwargs['drive_power'] == config.SOAK_DRIVE_POWER
             assert kwargs['turn_power'] == config.SOAK_TURN_POWER
             events.append('move')
         def measure(question):
             assert events[-1] == 'brake', events
             return 85.0
-        with patch('builtins.input', return_value='l' if verb == 'L' else 'r'), patch.object(bench_test, '_ask', return_value=True), patch.object(
+        with patch('builtins.input', return_value='l' if verb[0] == 'L' else 'r'), patch.object(bench_test, '_ask', return_value=True), patch.object(
                 bench_test, '_pause'), patch.object(bench_test.motion, 'execute', side_effect=execute), patch.object(
                 drive, 'stop_motors', side_effect=lambda: events.append('brake')), patch.object(
                 bench_test, '_ask_number', side_effect=measure):

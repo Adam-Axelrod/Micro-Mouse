@@ -903,7 +903,7 @@ def bt9_straight_drive():
     print("== BT-9 straight drive: {} mm, no turns ==".format(
         config.BENCH_STRAIGHT_CELLS * config.MM_PER_CELL))
     print("Mark a straight line and starting nose position; allow clear run-off.")
-    verbs = ["{} {}".format(commands.FORWARD, config.BENCH_STRAIGHT_CELLS), commands.HALT]
+    verbs = [(commands.FORWARD, config.BENCH_STRAIGHT_CELLS), (commands.HALT, None)]
     if not _floor_motion("BT-9", verbs):
         return
     for label, question in (
@@ -925,7 +925,7 @@ def bt10_single_pivot():
         return
     print("Mark perpendicular heading lines; align the robot on the first line.")
     verb = commands.LEFT if direction == "l" else commands.RIGHT
-    if not _floor_motion("BT-10", [verb, commands.HALT]):
+    if not _floor_motion("BT-10", [(verb, None), (commands.HALT, None)]):
         return
     value = _ask_number("Actual angle turned, degrees (positive in the selected direction)?")
     _record("BT-10.angle_deg", "SKIP" if value is None else "VALUE",

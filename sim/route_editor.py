@@ -199,7 +199,7 @@ class RouteEditor:
         print("saved {}".format(self.out_path))
         print("  {}x{} grid, start {} facing {}, end {}".format(
             self.grid[0], self.grid[1], self.start, self.start_heading, self.end))
-        print("  {}".format(movement_commands))
+        print("  {}".format(commands.format_verbs(movement_commands)))
         # Laps are the drift test, and path_to_commands always ends on a drive,
         # so a loop never closes on its own. Say so at save time rather than let
         # lap 2 set off in the wrong direction.

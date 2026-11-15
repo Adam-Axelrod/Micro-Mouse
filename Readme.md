@@ -123,7 +123,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`brain/maze.py`** | `MazeStructure` class and `.num` file reader (`num_file_import`) / writer (`num_file_export`). |
 | **`brain/explorer.py`** | Pure `Explorer` class that manages belief maps and steps between cells. |
 | **`brain/search_algorithms.py`** | Pure flood-fill distance transform and greedy descent pathfinding, plus `route_is_open` (the replan trigger). |
-| **`brain/commands.py`** | Translates absolute cell routes into egocentric relative commands (`F n`, `L`, `R`, `U`, `H`), and reads and writes the `.mmc` route file, header included. |
+| **`brain/commands.py`** | Translates absolute cell routes into egocentric verbs, each a pair `(letter, cells)` such as `("F", 2)` or `("R", None)`, and reads and writes the `.mmc` route file, header included. |
 | **`modes/exploration.py`** | Mode 1. Cell-by-cell exploration loop. Simulation only -- see section 2. |
 | **`modes/speed_run.py`** | Mode 2, and the only mode that PLANS. Loads a belief, floods it, turns the path into verbs and hands them to `motion.execute`. Owns the route, not the motors and not the timing. |
 | **`modes/follow_route.py`** | Mode 4. Drives a `.mmc` verbatim, `laps` times. `soak=True` (`--soak`) is the same run, long and logged. |

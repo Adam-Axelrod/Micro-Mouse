@@ -547,7 +547,7 @@ python3 -c "import maze; m = maze.MazeStructure(cols=6, rows=6); maze.num_file_e
 Verify the planned route before driving it:
 
 ```bash
-python3 -c "import maze, config, search_algorithms, commands; c,x,y = maze.num_file_import('mazes/blank6x6.num'); m = maze.MazeStructure(cells=c, cols=x, rows=y); r = search_algorithms.flood_fill(m, config.START_POS); print(r); print(commands.path_to_commands(r))"
+python3 -c "import maze, config, search_algorithms, commands; c,x,y = maze.num_file_import('mazes/blank6x6.num'); m = maze.MazeStructure(cells=c, cols=x, rows=y); r = search_algorithms.flood_fill(m, config.START_POS); print(r); print(commands.format_verbs(commands.path_to_commands(r)))"
 ```
 
 Then deploy it *as* `runs/belief.num`, which is the name speed run reads:

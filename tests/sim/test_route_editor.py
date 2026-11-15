@@ -164,11 +164,11 @@ def test_rotating_the_start_heading_changes_the_verbs_not_the_cells():
     cells_before = list(editor.route)
 
     assert editor.start_heading == "n"
-    assert commands.path_to_commands(editor.route, "n") == ["F 2", "H"]
+    assert commands.path_to_commands(editor.route, "n") == [("F", 2), ("H", None)]
     editor.key("r")
     assert editor.start_heading == "e"
     assert editor.route == cells_before, "rotating moved a cell"
-    assert commands.path_to_commands(editor.route, "e") == ["L", "F 2", "H"]
+    assert commands.path_to_commands(editor.route, "e") == [("L", None), ("F", 2), ("H", None)]
 
     for expected in ("s", "w", "n"):
         editor.key("r")
@@ -200,7 +200,7 @@ def test_the_saved_header_carries_the_pose_and_the_grid():
         assert header["grid"] == (4, 9), header
         assert header["start"] == (1, 0, "e"), header
         assert header["goal"] == (2, 1), header
-        assert commands.read_command_file(OUT_PATH) == ["L", "F 1", "R", "F 1", "H"]
+        assert commands.read_command_file(OUT_PATH) == [("L", None), ("F", 1), ("R", None), ("F", 1), ("H", None)]
     finally:
         os.remove(OUT_PATH)
     print("✓ test_the_saved_header_carries_the_pose_and_the_grid passed")
@@ -224,7 +224,7 @@ def test_a_drawn_perimeter_lap_does_not_close_in_heading():
     verbs = commands.path_to_commands(lap)
     assert lap[0] == lap[-1]
     assert not commands.closes_the_loop(verbs), verbs
-    assert commands.closes_the_loop(verbs[:-1] + ["R", commands.HALT])
+    assert commands.closes_the_loop(verbs[:-1] + [("R", None), (commands.HALT, None)])
     print("✓ test_a_drawn_perimeter_lap_does_not_close_in_heading passed")
 
 
@@ -275,7 +275,7 @@ def test_the_real_loop_survives_real_clicks_at_every_grid_size():
 def test_the_committed_lap_fixture_is_walkable_and_closed():
     verbs = commands.read_command_file(config.ROUTES_DIR + "/lap3x3.mmc")
     assert commands.closes_the_loop(verbs), verbs
-    assert verbs[-1] == commands.HALT
+    assert verbs[-1] == (commands.HALT, None)
     header = commands.read_route_header(config.ROUTES_DIR + "/lap3x3.mmc")
     assert header["grid"] == (3, 3), header
     assert header["start"][:2] == header["goal"], "a lap must end where it began"

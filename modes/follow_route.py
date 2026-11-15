@@ -56,7 +56,7 @@ def _load_route(route_path, laps, retrace=False):
     movement_commands = commands.read_command_file(route_path)
     header = commands.read_route_header(route_path)
     print("Route: {} ({} verbs) x {} lap(s)".format(route_path, len(movement_commands), laps))
-    print("Verbs: {}".format(movement_commands))
+    print("Verbs: {}".format(commands.format_verbs(movement_commands)))
     _report_route_pose(header)
 
     start_pose = header.get("start")
@@ -78,7 +78,7 @@ def _load_route(route_path, laps, retrace=False):
     if retrace and not closes:
         movement_commands = commands.with_return_leg(movement_commands, start_pose)
         print("RETRACING: U-turn at the end, the path walked backwards, U-turn home.")
-        print("  Lap is now {} verbs: {}".format(len(movement_commands), movement_commands))
+        print("  Lap is now {} verbs: {}".format(len(movement_commands), commands.format_verbs(movement_commands)))
         print("  A retrace cancels its own symmetric error -- an equal shortfall each")
         print("  way subtracts, and every right turn out is a left turn back. The two")
         print("  U-turns are what accumulates, so this measures pivots above all.")
