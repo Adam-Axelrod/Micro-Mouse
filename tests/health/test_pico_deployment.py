@@ -51,6 +51,7 @@ class ADC:
 '''
 
 BOOT_CHECK = '''
+import os
 import sys
 from hal import drive
 import main
@@ -58,7 +59,8 @@ from hal import setup
 
 assert setup.IS_HARDWARE, "the machine stub was not picked up"
 assert not [m for m in sys.modules if m == "sim" or m.startswith("sim.")], "sim/ was imported"
-assert "bench_test" not in sys.modules, "bench_test was imported at module scope"
+assert not [m for m in sys.modules if m == "tools" or m.startswith("tools.")], "tools/ was imported at boot"
+assert not os.path.exists("tools"), "the deployment holds a tools/ folder"
 assert "pygame" not in sys.modules, "pygame reached the board"
 assert callable(main.stop_motors), "the CHEATSHEET e-stop is gone"
 
@@ -102,6 +104,25 @@ def test_the_minimal_deployment_boots():
         assert result.returncode == 0, result.stderr.strip()
         assert "OK" in result.stdout
     print("✓ test_the_minimal_deployment_boots passed")
+
+
+def test_a_deployment_has_no_tools_folder():
+    """tools/ is optional: the boot check above runs on a robot without it."""
+    with tempfile.TemporaryDirectory() as directory:
+        _build_deployment(directory)
+        assert not os.path.exists(os.path.join(directory, "tools"))
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import main\nfrom tools import bench_test"],
+            cwd=directory, capture_output=True, text=True)
+        assert result.returncode != 0 and "tools" in result.stderr, \
+            "the bench module was reachable with no tools/ folder"
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import main\nmain.run_bench()"],
+            cwd=directory, capture_output=True, text=True)
+        assert "tools" in result.stderr, "main.run_bench did not reach for tools/"
+    print("\u2713 test_a_deployment_has_no_tools_folder passed")
 
 
 def test_a_deployment_missing_drive_fails_loudly():
@@ -164,6 +185,7 @@ TESTS = (
     test_micropico_upload_includes_operator_route_and_map,
     test_pico_mode_four_defaults_to_retraced_stress_test,
     test_the_minimal_deployment_boots,
+    test_a_deployment_has_no_tools_folder,
     test_a_deployment_missing_drive_fails_loudly,
     test_the_deployment_set_needs_no_third_party_package,
 )

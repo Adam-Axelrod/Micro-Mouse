@@ -38,7 +38,7 @@ def run_bench(**kwargs):
     (AGENTS.md, CHEATSHEET.md section 2). Importing it at module scope made a
     minimal Pico deployment fail to boot, and cost the RAM on every ordinary run.
     """
-    from modes import bench_test
+    from tools import bench_test
     bench_test.run_all()
 
 
@@ -134,7 +134,7 @@ def execute(mode_index, enable_render, argv=()):
 
 def main():
     if "--maxspeed" in sys.argv:
-        print("Max-speed mode was removed. Use from modes import max_speed_test; max_speed_test.run() at the REPL.")
+        print("Max-speed mode was removed. Use from tools import max_speed_test; max_speed_test.run() at the REPL.")
         return
 
     enable_render = "--render" in sys.argv or "-r" in sys.argv

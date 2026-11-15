@@ -35,7 +35,7 @@ record/__init__.py record/motor_log.py record/lap_log.py
 brain/__init__.py brain/maze.py brain/explorer.py brain/search_algorithms.py
 brain/commands.py
 modes/__init__.py modes/exploration.py modes/speed_run.py
-modes/follow_route.py modes/max_speed_test.py
+modes/follow_route.py
                             +  runs/belief.num  +  runs/route.mmc
 ```
 
@@ -48,13 +48,13 @@ for an on-device fault.
 Four packages, four rules. `hal/` is the board: the platform probe, the pins,
 the motors, the clock. `record/` is what a run wrote down. `brain/` is pure
 cells and headings. `modes/` is one module per mode, and no mode imports
-another. `config.py` and `files.py` stay at root because every layer reads them
+another. `tools/` holds the two REPL instruments, optional on the board. `config.py` and `files.py` stay at root because every layer reads them
 and neither is a layer's business.
 
 `hal/encoders.py` is now part of the base set: `hal/setup.py` loads
 it on first encoder read. `runs/route.mmc` is what mode 4 drives, so copy the route
-you mean to run: the board has no editor. Add for hardware work: `modes/bench_test.py` — `main.py` imports
-it lazily, so the set above boots without it.
+you mean to run: the board has no editor. Add for hardware work: `tools/__init__.py`, `tools/bench_test.py` and `tools/max_speed_test.py` (`mpremote mkdir :tools` first). `main.py` imports
+`tools.bench_test` lazily, so the set above boots without the `tools/` folder.
 
 `hal/drive.py` is the motor boundary: every mode drives through it. `motion.py`
 is the one place a distance or an angle becomes a duration. The whole `sim/`
@@ -78,7 +78,7 @@ mpremote cp runs/belief.num runs/route.mmc :runs/
 mpremote cp hal/__init__.py hal/setup.py hal/drive.py hal/clock.py hal/encoders.py :hal/
 mpremote cp record/__init__.py record/motor_log.py record/lap_log.py :record/
 mpremote cp brain/__init__.py brain/maze.py brain/explorer.py brain/search_algorithms.py brain/commands.py :brain/
-mpremote cp modes/__init__.py modes/exploration.py modes/speed_run.py modes/follow_route.py modes/max_speed_test.py :modes/
+mpremote cp modes/__init__.py modes/exploration.py modes/speed_run.py modes/follow_route.py :modes/
 ```
 
 `mpremote mkdir` fails if the directory already exists, which is harmless: run
@@ -118,10 +118,10 @@ feeds it as *text* to the prompt — it does not execute. Interrupt first
 
 ---
 
-## 4. Bench tests (`modes/bench_test.py`)
+## 4. Bench tests (`tools/bench_test.py`)
 
 ```python
-from modes import bench_test
+from tools import bench_test
 bench_test.run_all()      # all checks, dependency order
 bench_test.summary()      # paste-back block of results
 bench_test.reset_results()
@@ -161,7 +161,7 @@ Keep USB connected for the interactive prompts. Mark a straight line and a pair
 of perpendicular heading lines on a clear floor, then run either check directly:
 
 ```python
-from modes import bench_test
+from tools import bench_test
 bench_test.bt9_straight_drive()   # 360 mm at 0.40; no turns
 bench_test.bt10_single_pivot()    # choose l/r; one 90° pivot at 0.40
 bench_test.summary()
@@ -176,7 +176,7 @@ mode 3; skip earlier checks when focusing on motion.
 ### Deeper encoder fault-finding
 
 ```python
-from modes import bench_test
+from tools import bench_test
 bench_test.monitor()          # hand-roll, watch counts
 bench_test.channel_levels()   # which of A/B is pinned = the open line
 bench_test.wiggle_watch()     # flex the board, catch intermittents
@@ -253,7 +253,7 @@ Set up:
 2. Leave at least 0.7 m of run-off past the far mark. The robot targets
    5.2 m, and it will overshoot if it is faster than the constant claims.
 3. Line the robot's nose up on the start line, pointing down the lane.
-4. From the REPL: `from modes import max_speed_test; max_speed_test.run()`.
+4. From the REPL: `from tools import max_speed_test; max_speed_test.run()`.
 
 What the LED does, in order:
 
@@ -270,7 +270,7 @@ the nose actually travelled, start line to where it stopped, and hand both
 numbers back:
 
 ```python
-from modes import max_speed_test
+from tools import max_speed_test
 max_speed_test.calibrate(travelled_mm=5060, stopwatch_s=10.4)
 ```
 
@@ -312,7 +312,7 @@ and `calibrate()` appends its results as a comment beneath. Copy it off with
 From the REPL you can vary the dash without re-flashing:
 
 ```python
-from modes import max_speed_test
+from tools import max_speed_test
 max_speed_test.run()                    # 5.2 m at full duty
 max_speed_test.run(distance_mm=3000)    # shorter lane
 max_speed_test.run(power=0.55)          # at cruise duty instead

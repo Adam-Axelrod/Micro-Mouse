@@ -23,7 +23,7 @@ a floor measurement: only the tape says what the chassis does.
 
     On the Pico, from the REPL:
 
-        from modes import max_speed_test
+        from tools import max_speed_test
         max_speed_test.run()                      # 5.2 m at full duty
         max_speed_test.run(distance_mm=3000)      # shorter dash
         max_speed_test.run(power=0.55)            # at cruise duty instead
@@ -410,7 +410,7 @@ def run(distance_mm=None, power=None, enable_render=False):
 
     print("")
     print("Now read the floor, then call calibrate() with what you measured:")
-    print("    import max_speed_test")
+    print("    from tools import max_speed_test")
     print("    max_speed_test.calibrate(travelled_mm=<nose to nose>, stopwatch_s=<t>)")
     print("  travelled_mm = start line to where the nose actually stopped")
     print("  stopwatch_s  = your time over the 5.00 m mark (marked_mm, default 5000)")

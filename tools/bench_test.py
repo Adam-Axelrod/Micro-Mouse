@@ -6,7 +6,7 @@ produces BENCH EVIDENCE: every check ends in a recorded PASS/FAIL/value that
 
     Copy to the Pico, then in the REPL:
 
-        from modes import bench_test
+        from tools import bench_test
         bench_test.run_all()     # guided, in dependency order
         bench_test.summary()     # paste-back block of every result so far
 

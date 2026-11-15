@@ -3,7 +3,7 @@ import os
 import sys
 from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from modes import bench_test
+from tools import bench_test
 from hal import drive
 import config
 

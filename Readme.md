@@ -21,15 +21,13 @@ Four layers. Each knows the layer below it and nothing above.
     +-------------+ +--------------------+ +-------------+ +--------------+
 
  2  MODES/ -- one module per mode. No mode imports another mode.
-    +-----------+ +-------------+ +------------+ +------------+ +------------+
-    |  main.py  | | exploration | | speed_run  | | bench_test | | max_speed_ |
-    | SW1/SW2 + | |   mode 1    | |   mode 2   | |   mode 3   | |    test    |
-    | dispatch  | |             | | plan+drive | |lazy import | |   mode 4   |
-    +-----------+ +-------------+ +------------+ +------------+ +------------+
-                                  +------------------------+
-                                  |     follow_route       |
-                                  | mode 4, and --soak     |
-                                  +------------------------+
+    +-----------+ +-------------+ +------------+ +----------------+
+    |  main.py  | | exploration | | speed_run  | |  follow_route  |
+    | SW1/SW2 + | |   mode 1    | |   mode 2   | | mode 4, --soak |
+    | dispatch  | |             | | plan+drive | |                |
+    +-----------+ +-------------+ +------------+ +----------------+
+    tools/ (REPL instruments, optional on the board): bench_test is mode 3
+    by a lazy import in main.py; max_speed_test is run from the REPL.
                          |              |            |            |
                          +--------------+------------+------------+
                                         v
@@ -97,7 +95,7 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
    * Translates the path into egocentric verbs (`F n`, `L`, `R`, `U`, `H`) via `brain/commands.py`.
    * Drives the mouse through the movement sequence.
 3. **Mode 3: Bench Test Mode (`--bench`)**:
-   * Runs bringing-up hardware checks end-to-end (`modes/bench_test.py`).
+   * Runs bringing-up hardware checks end-to-end (`tools/bench_test.py`).
 4. **Mode 4: Follow Route (`--follow`)**:
    * Drives a hand-authored `.mmc` verbatim, so the planner is not a suspect if the robot ends up in the wrong place. `--route=`, `--map=` and `--laps=` select the file, the world and the lap count.
 
@@ -129,8 +127,8 @@ When `main.py` runs, **SW1 (Pin 15)** cycles through available modes with onboar
 | **`modes/exploration.py`** | Mode 1. Cell-by-cell exploration loop. Simulation only -- see section 2. |
 | **`modes/speed_run.py`** | Mode 2, and the only mode that PLANS. Loads a belief, floods it, turns the path into verbs and hands them to `motion.execute`. Owns the route, not the motors and not the timing. |
 | **`modes/follow_route.py`** | Mode 4. Drives a `.mmc` verbatim, `laps` times. `soak=True` (`--soak`) is the same run, long and logged. |
-| **`modes/bench_test.py`** | Mode 3. BT-0..BT-8 bring-up plus BT-9 straight-drive and BT-10 single-pivot floor measurements. Imported lazily by `main.py`; not in the minimal deployment set. |
-| **`modes/max_speed_test.py`** | Mode 4. One straight dash over a marked distance, sampling the encoders as it goes so the acceleration ramp and terminal speed come out of a single run. Plus `calibrate()`. |
+| **`tools/bench_test.py`** | Mode 3. BT-0..BT-8 bring-up plus BT-9 straight-drive and BT-10 single-pivot floor measurements. Imported lazily by `main.py`; not in the minimal deployment set. |
+| **`tools/max_speed_test.py`** | REPL only, no button mode. One straight dash over a marked distance, sampling the encoders as it goes so the acceleration ramp and terminal speed come out of a single run. Plus `calibrate()`. |
 | **`record/lap_log.py`** | The soak's instrument. One CSV row per lap, and the lit-minus-unlit sensor read. Never raises at the call site: a dead log must not end a twenty minute run. |
 | **`hal/clock.py`** | Which clock a timed run uses. The Pico sleeps and its wall clock is real; the PC steps physics and only the sim clock means anything. |
 | **`record/motor_log.py`** | Change-only CSV trace of commanded motor powers (format v1). Written on every hardware run, and on `--log` from the PC. |
@@ -190,5 +188,5 @@ python3 sim/replay_log.py --render
 ```
 
 ### Running on Pico W Hardware
-1. Copy the deployment set to the Pico's root filesystem -- **not** the whole directory. `sim/` must never go on the board, and `modes/bench_test.py` is optional. `CHEATSHEET.md` section 2 has the exact `mpremote` line.
+1. Copy the deployment set to the Pico's root filesystem -- **not** the whole directory. `sim/` must never go on the board, and `tools/` is optional. `CHEATSHEET.md` section 2 has the exact `mpremote` line.
 2. MicroPython automatically executes `main.py` on power-up.

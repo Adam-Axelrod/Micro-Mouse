@@ -30,11 +30,14 @@ DEPLOYMENT_SET = (
     "brain/__init__.py", "brain/maze.py", "brain/explorer.py",
     "brain/search_algorithms.py", "brain/commands.py",
     "modes/__init__.py", "modes/exploration.py", "modes/speed_run.py",
-    "modes/follow_route.py", "modes/max_speed_test.py",
+    "modes/follow_route.py",
 )
 
 # First-party packages that DO go on the board, unlike sim/.
-LOCAL_PACKAGES = ("brain", "hal", "modes", "record")
+LOCAL_PACKAGES = ("brain", "hal", "modes", "record", "tools")
+
+# Packages the board boots without. Their __init__.py sits in OPTIONAL_ON_HARDWARE.
+OPTIONAL_PACKAGES = ("tools",)
 
 # Which package may import what. `config` and the MicroPython builtins are always
 # allowed; everything else must be listed. This is how a directory earns its
@@ -51,16 +54,20 @@ LAYERS = {
     # another mode. A mode that wants a driver takes `hal.drive`, and a mode
     # that wants the executor takes `motion`.
     "modes": {"brain", "hal", "motion", "record", "sim", "world"},
+    # The REPL instruments drive and measure. `tools` is absent from the sets
+    # above, so no mode and no layer may import one.
+    "tools": {"brain", "hal", "motion", "record", "tools"},
 }
 
 # Imported lazily, so it may sit outside the deployment set without breaking boot.
-OPTIONAL_ON_HARDWARE = ("modes/bench_test.py",)
+OPTIONAL_ON_HARDWARE = ("tools/__init__.py", "tools/bench_test.py",
+                        "tools/max_speed_test.py")
 
 PICO_ONLY_BUILTINS = ("os", "sys", "time", "math", "gc", "array", "machine", "rp2", "utime")
 
 # Imports MicroPython's `machine`/`rp2` directly, so it cannot load on a PC.
 # setup.get_encoders() imports it lazily, on first use, for exactly this reason.
-PICO_ONLY_MODULES = ("hal.encoders", "modes.bench_test")
+PICO_ONLY_MODULES = ("hal.encoders", "tools.bench_test")
 
 
 def _local_modules():
@@ -256,7 +263,11 @@ def test_every_package_ships_its_init():
     for package in LOCAL_PACKAGES:
         init = package + "/__init__.py"
         assert os.path.exists(os.path.join(PACKAGE_DIR, init)), init
-        assert init in DEPLOYMENT_SET, "{} is not in the deployment set".format(init)
+        if package in OPTIONAL_PACKAGES:
+            assert init in OPTIONAL_ON_HARDWARE, "{} is not listed as optional".format(init)
+            assert init not in DEPLOYMENT_SET, "{} is optional, not deployed".format(init)
+        else:
+            assert init in DEPLOYMENT_SET, "{} is not in the deployment set".format(init)
     print("\u2713 test_every_package_ships_its_init passed")
 
 
@@ -287,10 +298,11 @@ def test_the_deployment_set_is_closed_under_imports():
     print("\u2713 test_the_deployment_set_is_closed_under_imports passed")
 
 
-def test_bench_test_is_not_imported_at_module_scope():
-    """It is 914 lines and not deployed, so a module-scope import fails at boot."""
-    assert "bench_test" not in _toplevel_imports("main.py")
-    print("\u2713 test_bench_test_is_not_imported_at_module_scope passed")
+def test_tools_are_not_imported_at_module_scope():
+    """tools/ is optional on the board, so a module-scope import fails at boot."""
+    offenders = [path for path in DEPLOYMENT_SET if "tools" in _toplevel_imports(path)]
+    assert not offenders, offenders
+    print("\u2713 test_tools_are_not_imported_at_module_scope passed")
 
 
 def test_pygame_stays_inside_sim():
@@ -303,7 +315,7 @@ def test_only_setup_probes_the_platform():
     """Every other module must take its hardware handles from setup."""
     offenders = []
     for path in _local_modules():
-        if path in ("hal/setup.py", "hal/encoders.py", "modes/bench_test.py"):
+        if path in ("hal/setup.py", "hal/encoders.py", "tools/bench_test.py"):
             continue
         if "machine" in _toplevel_imports(path):
             offenders.append(path)
@@ -390,7 +402,7 @@ TESTS = (
     test_every_package_ships_its_init,
     test_the_deployment_set_exists,
     test_the_deployment_set_is_closed_under_imports,
-    test_bench_test_is_not_imported_at_module_scope,
+    test_tools_are_not_imported_at_module_scope,
     test_pygame_stays_inside_sim,
     test_only_setup_probes_the_platform,
     test_documented_paths_point_somewhere_real,
