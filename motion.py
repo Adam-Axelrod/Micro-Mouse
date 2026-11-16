@@ -55,43 +55,28 @@ def pivot_seconds(quarter_turns, power=None):
     return (math.pi / 2.0) * quarter_turns / pivot_rate_rads
 
 
-def pivot(quarter_turns, clockwise=True, render_object=None, belief=None,
-          route=None, power=None):
+def pivot(quarter_turns, clockwise=True, power=None):
     """Spin on the spot through `quarter_turns` x 90 degrees at `power`.
 
     The duration is derived from whatever power is actually used, never from a
     different one. That is the same trap as scaling both, in another guise.
     """
-    drive.pivot_for(pivot_seconds(quarter_turns, power), clockwise,
-                    render_object, belief, route, power)
+    drive.pivot_for(pivot_seconds(quarter_turns, power), clockwise, power)
 
 
-def _verb_and_argument(command_string):
-    """("F 3") -> ("F", 3). None for a blank line or a comment."""
-    if not command_string or command_string.startswith("#"):
-        return None, None
-    parts = command_string.split()
-    return parts[0], (int(parts[1]) if len(parts) > 1 else None)
-
-
-def execute(movement_commands, render_object=None, belief=None, route=None,
-            drive_power=None, turn_power=None):
-    """Execute egocentric movement verbs: F n, L, R, U, H.
+def execute(movement_commands, drive_power=None, turn_power=None):
+    """Execute egocentric movement verbs: (F, n), (L, None), (R, None), (U, None), (H, None).
 
     `drive_power` and `turn_power` let a mode go slower than a speed run.
     """
-    print("Executing movement route: {}".format(movement_commands))
+    print("Executing movement route: {}".format(commands.format_verbs(movement_commands)))
 
-    for command_string in movement_commands:
-        verb, argument = _verb_and_argument(command_string)
-        if verb is None:
-            continue
-
+    for verb, cells in movement_commands:
         if verb == commands.FORWARD:
-            seconds = forward_seconds(argument * config.MM_PER_CELL, drive_power)
+            seconds = forward_seconds(cells * config.MM_PER_CELL, drive_power)
             power = drive.CRUISE_DUTY_POWER if drive_power is None else drive_power
             drive.drive_motors(power, power)
-            drive.run_motion_for(seconds, render_object, belief, route)
+            drive.run_motion_for(seconds)
             drive.stop_motors()
 
         elif verb in (commands.LEFT, commands.RIGHT, commands.UTURN):
@@ -103,14 +88,14 @@ def execute(movement_commands, render_object=None, belief=None, route=None,
                 quarter_turns, clockwise = 1, True
             else:
                 quarter_turns, clockwise = 2, True
-            pivot(quarter_turns, clockwise, render_object, belief, route, turn_power)
+            pivot(quarter_turns, clockwise, turn_power)
 
         elif verb == commands.HALT:
             drive.stop_motors()
             print("Route completed successfully!")
             break
 
-        drive.run_motion_for(config.INTER_COMMAND_SETTLE_S, render_object, belief, route)
+        drive.run_motion_for(config.INTER_COMMAND_SETTLE_S)
 
 
 def lap_seconds(movement_commands, drive_power=None, turn_power=None):
@@ -121,12 +106,9 @@ def lap_seconds(movement_commands, drive_power=None, turn_power=None):
     which gets run with a flat battery.
     """
     total_seconds = 0.0
-    for command_string in movement_commands:
-        verb, argument = _verb_and_argument(command_string)
-        if verb is None:
-            continue
+    for verb, cells in movement_commands:
         if verb == commands.FORWARD:
-            total_seconds += forward_seconds(argument * config.MM_PER_CELL, drive_power)
+            total_seconds += forward_seconds(cells * config.MM_PER_CELL, drive_power)
         elif verb in commands.QUARTER_TURNS:
             total_seconds += pivot_seconds(abs(commands.QUARTER_TURNS[verb]), turn_power)
         total_seconds += config.INTER_COMMAND_SETTLE_S

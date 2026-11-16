@@ -62,27 +62,27 @@ jobs:
           python main.py --speed
           python main.py --step
           python main.py --maxspeed
-          cp routes/lap3x3.mmc route.mmc
+          mkdir -p runs && cp routes/lap3x3.mmc runs/route.mmc
           python main.py --follow --map=mazes/test_mazes/blank3x3.num --laps=3
           # No --map: the world comes from the route header's own grid size.
           python main.py --follow --laps=2
           python main.py --soak --laps=3 --power=0.3
-          test -s lap_soak.csv
+          test -s runs/lap_soak.csv
           # Mode 5 must refuse a route that does not return to its start cell.
-          cp routes/perimeter3x3.mmc route.mmc
+          cp routes/perimeter3x3.mmc runs/route.mmc
           python main.py --soak --laps=3 | grep -q "REFUSING"
 
       - name: Trace a run, then replay it into the sim
         run: |
           python main.py --speed --log
-          test -s motor_log.csv
+          test -s runs/motor_log.csv
           python sim/replay_log.py
 
       - name: Modes render without crashing
         run: |
           python main.py --speed --render
           python main.py --follow --map=mazes/test_mazes/blank3x3.num --render
-          cp routes/lap3x3.mmc route.mmc
+          mkdir -p runs && cp routes/lap3x3.mmc runs/route.mmc
           python main.py --soak --laps=2 --render
 
       # Run as MODULES, not files: `python brain/maze.py` puts brain/ on the

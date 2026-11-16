@@ -22,3 +22,27 @@ def file_exists(path_str):
         return True
     except OSError:
         return False
+
+
+def ensure_dir(path_str):
+    """Create the directory `path_str` sits in. Safe to call on every write.
+
+    Artefacts live in `runs/`, and MicroPython will not create a missing parent
+    for you: `open("runs/x.csv", "w")` on a fresh Pico raises ENOENT. Every
+    writer calls this first rather than each one carrying its own guard.
+
+    One level only. `os.makedirs` does not exist on MicroPython, and the tree is
+    one directory deep by design.
+    """
+    index = path_str.rfind("/")
+    if index <= 0:
+        return
+    directory = path_str[:index]
+    if file_exists(directory):
+        return
+    try:
+        os.mkdir(directory)
+    except OSError:
+        # Lost a race, or the filesystem is read-only. The open() that follows
+        # reports the real problem; this must not be the thing that raises.
+        pass

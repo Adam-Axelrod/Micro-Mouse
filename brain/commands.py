@@ -1,5 +1,7 @@
 import config
+import files
 
+# A verb is a pair (letter, cells): cells is an int for F and None for the rest.
 # Kept tiny and egocentric: F carries cell count; turns take no arguments
 FORWARD = "F"   # F n: drive forward n cells
 LEFT = "L"      # pivot 90 deg left in place
@@ -21,7 +23,7 @@ def turn_between(current_heading, target_heading):
 
 
 def path_to_commands(route, start_heading=config.DIRECTIONS[0]):
-    """Convert a list of grid cells into egocentric movement commands (F n, L, R, U, H)."""
+    """Convert a list of grid cells into egocentric verbs: (F, n), (L, None), (R, None), (U, None), (H, None)."""
     movement_commands = []
     current_heading = start_heading
     forward_run_count = 0
@@ -34,15 +36,15 @@ def path_to_commands(route, start_heading=config.DIRECTIONS[0]):
 
         if needed_heading != current_heading:
             if forward_run_count > 0:
-                movement_commands.append(f"{FORWARD} {forward_run_count}")
+                movement_commands.append((FORWARD, forward_run_count))
                 forward_run_count = 0
-            movement_commands.append(turn_between(current_heading, needed_heading))
+            movement_commands.append((turn_between(current_heading, needed_heading), None))
             current_heading = needed_heading
         forward_run_count += 1
 
     if forward_run_count > 0:
-        movement_commands.append(f"{FORWARD} {forward_run_count}")
-    movement_commands.append(HALT)
+        movement_commands.append((FORWARD, forward_run_count))
+    movement_commands.append((HALT, None))
 
     return movement_commands
 
@@ -59,7 +61,7 @@ def net_quarter_turns(movement_commands):
     the route ends facing wherever the final move pointed. A closing turn has to
     be appended deliberately -- see routes/lap3x3.mmc.
     """
-    return sum(QUARTER_TURNS.get(verb.split()[0], 0) for verb in movement_commands if verb.strip())
+    return sum(QUARTER_TURNS.get(letter, 0) for letter, _cells in movement_commands)
 
 
 def closes_the_loop(movement_commands):
@@ -89,21 +91,17 @@ def walk_route(movement_commands, start_pose):
     """
     x, y, heading = start_pose
     poses = [(x, y, heading)]
-    for command_string in movement_commands:
-        if not command_string or command_string.startswith("#"):
-            continue
-        parts = command_string.split()
-        verb = parts[0]
-        if verb == FORWARD:
+    for letter, cells in movement_commands:
+        if letter == FORWARD:
             dx, dy = config.SIDE_DELTA[heading]
-            for _ in range(int(parts[1])):
+            for _ in range(cells):
                 x += dx
                 y += dy
                 poses.append((x, y, heading))
-        elif verb in QUARTER_TURNS:
-            heading = turn_heading(heading, QUARTER_TURNS[verb])
+        elif letter in QUARTER_TURNS:
+            heading = turn_heading(heading, QUARTER_TURNS[letter])
             poses.append((x, y, heading))
-        elif verb == HALT:
+        elif letter == HALT:
             break
     return poses
 
@@ -142,12 +140,11 @@ def with_return_leg(movement_commands, start_pose):
     end_heading = walk_route(movement_commands, start_pose)[-1][2]
     turned_about = config.OPPOSITE[end_heading]
 
-    out_verbs = [verb for verb in movement_commands
-                 if verb.strip() and not verb.startswith("#") and verb.split()[0] != HALT]
+    out_verbs = [verb for verb in movement_commands if verb[0] != HALT]
     back_verbs = path_to_commands(list(reversed(path)), start_heading=turned_about)
-    back_verbs = [verb for verb in back_verbs if verb.split()[0] != HALT]
+    back_verbs = [verb for verb in back_verbs if verb[0] != HALT]
 
-    return out_verbs + [UTURN] + back_verbs + [UTURN, HALT]
+    return out_verbs + [(UTURN, None)] + back_verbs + [(UTURN, None), (HALT, None)]
 
 
 def leaves_the_grid(movement_commands, start_pose, grid):
@@ -169,6 +166,19 @@ HEADER_START = "# start:"
 HEADER_GOAL = "# goal:"
 
 
+def verb_text(verb):
+    """The text of one verb, as a .mmc line: "F 2", "R"."""
+    letter, cells = verb
+    if cells is None:
+        return letter
+    return "{} {}".format(letter, cells)
+
+
+def format_verbs(verbs):
+    """A verb list as text for a print: ['F 2', 'R', 'H']."""
+    return str([verb_text(verb) for verb in verbs])
+
+
 def render_command_file(movement_commands, maze_name=None, grid=None,
                         start=None, goal=None):
     """Render movement commands as line-oriented text string.
@@ -184,7 +194,7 @@ def render_command_file(movement_commands, maze_name=None, grid=None,
         lines.append(f"{HEADER_START} {start[0]} {start[1]} {start[2]}")
     if goal:
         lines.append(f"{HEADER_GOAL} {goal[0]} {goal[1]}")
-    lines.extend(movement_commands)
+    lines.extend(verb_text(verb) for verb in movement_commands)
     return "\n".join(lines) + "\n"
 
 
@@ -230,7 +240,7 @@ def parse_command_file(text):
     The inverse of render_command_file. Comment lines (leading '#') and blanks
     are dropped. Every verb is VALIDATED here rather than at the motors: a
     malformed route must fail before the wheels turn, not halfway down a
-    corridor. Returns the same shape path_to_commands produces.
+    corridor. Returns the verb pairs path_to_commands produces.
     """
     movement_commands = []
     for line_number, raw_line in enumerate(text.split("\n"), start=1):
@@ -250,11 +260,11 @@ def parse_command_file(text):
                 raise ValueError("line {}: '{}' is not a cell count".format(line_number, parts[1]))
             if cells < 1:
                 raise ValueError("line {}: F {} does not move".format(line_number, cells))
-            movement_commands.append("{} {}".format(FORWARD, cells))
+            movement_commands.append((FORWARD, cells))
         elif verb in VERBS_WITHOUT_ARG:
             if len(parts) != 1:
                 raise ValueError("line {}: '{}' takes no argument".format(line_number, verb))
-            movement_commands.append(verb)
+            movement_commands.append((verb, None))
         else:
             raise ValueError("line {}: unknown verb '{}'".format(line_number, verb))
 
@@ -273,6 +283,7 @@ def write_command_file(route, out_path_str, start_heading=config.DIRECTIONS[0],
                        maze_name=None, grid=None):
     """Convert route to commands and write to text file."""
     movement_commands = path_to_commands(route, start_heading)
+    files.ensure_dir(out_path_str)
     with open(out_path_str, "w") as file_handle:
         file_handle.write(render_command_file(
             movement_commands, maze_name, grid,
@@ -284,8 +295,9 @@ def write_command_file(route, out_path_str, start_heading=config.DIRECTIONS[0],
 if __name__ == "__main__":
     test_route = [(0, 0), (0, 1), (0, 2), (1, 2), (2, 2)]
     cmds = path_to_commands(test_route)
-    print("Test commands:", cmds)
-    assert cmds == ["F 2", "R", "F 2", "H"]
+    print("Test commands:", format_verbs(cmds))
+    assert cmds == [(FORWARD, 2), (RIGHT, None), (FORWARD, 2), (HALT, None)]
+    assert format_verbs(cmds) == "['F 2', 'R', 'F 2', 'H']", format_verbs(cmds)
 
     # Render and parse must round-trip: what the route editor writes is exactly
     # what the follow-route mode reads back.

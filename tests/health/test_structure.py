@@ -23,18 +23,20 @@ import config
 # travels with it, and MicroPython has no namespace packages to paper over the
 # one that got left behind.
 DEPLOYMENT_SET = (
-    "main.py", "config.py", "files.py", "motion.py", "world.py",
-    "hal/__init__.py", "hal/setup.py", "hal/drive.py", "hal/clock.py",
-    "hal/diagnostic_encoders.py",
+    "main.py", "config.py", "files.py", "motion.py",
+    "hal/__init__.py", "hal/setup.py", "hal/drive.py", "hal/encoders.py",
     "record/__init__.py", "record/motor_log.py", "record/lap_log.py",
     "brain/__init__.py", "brain/maze.py", "brain/explorer.py",
     "brain/search_algorithms.py", "brain/commands.py",
     "modes/__init__.py", "modes/exploration.py", "modes/speed_run.py",
-    "modes/follow_route.py", "modes/max_speed_test.py",
+    "modes/follow_route.py",
 )
 
 # First-party packages that DO go on the board, unlike sim/.
-LOCAL_PACKAGES = ("brain", "hal", "modes", "record")
+LOCAL_PACKAGES = ("brain", "hal", "modes", "record", "tools")
+
+# Packages the board boots without. Their __init__.py sits in OPTIONAL_ON_HARDWARE.
+OPTIONAL_PACKAGES = ("tools",)
 
 # Which package may import what. `config` and the MicroPython builtins are always
 # allowed; everything else must be listed. This is how a directory earns its
@@ -45,22 +47,26 @@ ALWAYS_ALLOWED = ("config", "files")
 
 LAYERS = {
     "brain": {"brain"},          # AGENTS.md invariant 2: the brain stays pure.
-    "hal": {"hal", "record", "sim"},   # the board, and what it writes down.
-    "record": {"hal", "record"},       # an instrument reads the clock, nothing more.
+    "hal": {"hal", "sim"},             # the board; it never reaches up to `record`.
+    "record": {"hal", "record"},       # a recorder hooks into the board, never the reverse.
     # D-016 as a test: `modes` is absent from this set, so no mode may import
     # another mode. A mode that wants a driver takes `hal.drive`, and a mode
     # that wants the executor takes `motion`.
-    "modes": {"brain", "hal", "motion", "record", "sim", "world"},
+    "modes": {"brain", "hal", "motion", "record"},
+    # The REPL instruments drive and measure. `tools` is absent from the sets
+    # above, so no mode and no layer may import one.
+    "tools": {"brain", "hal", "motion", "record", "tools"},
 }
 
 # Imported lazily, so it may sit outside the deployment set without breaking boot.
-OPTIONAL_ON_HARDWARE = ("modes/bench_test.py",)
+OPTIONAL_ON_HARDWARE = ("tools/__init__.py", "tools/bench_test.py",
+                        "tools/max_speed_test.py")
 
 PICO_ONLY_BUILTINS = ("os", "sys", "time", "math", "gc", "array", "machine", "rp2", "utime")
 
 # Imports MicroPython's `machine`/`rp2` directly, so it cannot load on a PC.
 # setup.get_encoders() imports it lazily, on first use, for exactly this reason.
-PICO_ONLY_MODULES = ("hal.diagnostic_encoders", "modes.bench_test")
+PICO_ONLY_MODULES = ("hal.encoders", "tools.bench_test")
 
 
 def _local_modules():
@@ -256,7 +262,11 @@ def test_every_package_ships_its_init():
     for package in LOCAL_PACKAGES:
         init = package + "/__init__.py"
         assert os.path.exists(os.path.join(PACKAGE_DIR, init)), init
-        assert init in DEPLOYMENT_SET, "{} is not in the deployment set".format(init)
+        if package in OPTIONAL_PACKAGES:
+            assert init in OPTIONAL_ON_HARDWARE, "{} is not listed as optional".format(init)
+            assert init not in DEPLOYMENT_SET, "{} is optional, not deployed".format(init)
+        else:
+            assert init in DEPLOYMENT_SET, "{} is not in the deployment set".format(init)
     print("\u2713 test_every_package_ships_its_init passed")
 
 
@@ -287,10 +297,11 @@ def test_the_deployment_set_is_closed_under_imports():
     print("\u2713 test_the_deployment_set_is_closed_under_imports passed")
 
 
-def test_bench_test_is_not_imported_at_module_scope():
-    """It is 914 lines and not deployed, so a module-scope import fails at boot."""
-    assert "bench_test" not in _toplevel_imports("main.py")
-    print("\u2713 test_bench_test_is_not_imported_at_module_scope passed")
+def test_tools_are_not_imported_at_module_scope():
+    """tools/ is optional on the board, so a module-scope import fails at boot."""
+    offenders = [path for path in DEPLOYMENT_SET if "tools" in _toplevel_imports(path)]
+    assert not offenders, offenders
+    print("\u2713 test_tools_are_not_imported_at_module_scope passed")
 
 
 def test_pygame_stays_inside_sim():
@@ -303,12 +314,105 @@ def test_only_setup_probes_the_platform():
     """Every other module must take its hardware handles from setup."""
     offenders = []
     for path in _local_modules():
-        if path in ("hal/setup.py", "hal/diagnostic_encoders.py", "modes/bench_test.py"):
+        if path in ("hal/setup.py", "hal/encoders.py", "tools/bench_test.py"):
             continue
         if "machine" in _toplevel_imports(path):
             offenders.append(path)
     assert not offenders, offenders
     print("\u2713 test_only_setup_probes_the_platform passed")
+
+
+# Names that say which platform is running. Only the platform boundary may read them.
+PLATFORM_NAMES = ("HAS_SIM", "IS_HARDWARE")
+
+
+def _every_source_file():
+    """Every .py file of the repository, as a path relative to PACKAGE_DIR."""
+    found = []
+    for root, dirs, names in os.walk(PACKAGE_DIR):
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("__pycache__", "runs")]
+        for name in names:
+            if name.endswith(".py"):
+                found.append(os.path.relpath(os.path.join(root, name), PACKAGE_DIR))
+    return sorted(found)
+
+
+def _platform_checks(source, filename="<source>"):
+    """Where `source` asks which platform runs: HAS_SIM, IS_HARDWARE or `setup.sim`."""
+    hits = []
+    for node in ast.walk(ast.parse(source, filename=filename)):
+        if isinstance(node, ast.Name) and node.id in PLATFORM_NAMES:
+            hits.append((node.lineno, node.id))
+        elif isinstance(node, ast.Attribute) and node.attr in PLATFORM_NAMES:
+            hits.append((node.lineno, node.attr))
+        elif (isinstance(node, ast.Attribute) and node.attr == "sim"
+              and isinstance(node.value, ast.Name) and node.value.id == "setup"):
+            hits.append((node.lineno, "setup.sim"))
+        elif isinstance(node, ast.ImportFrom) and node.module in ("hal.setup", "setup"):
+            hits += [(node.lineno, alias.name) for alias in node.names
+                     if alias.name in PLATFORM_NAMES + ("sim",)]
+    return sorted(hits)
+
+
+def _names_in_source(path, names):
+    """Lines of `path` that use any of `names` as an identifier."""
+    with open(os.path.join(PACKAGE_DIR, path)) as handle:
+        tree = ast.parse(handle.read(), filename=path)
+    hits = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in names:
+            hits.append((node.lineno, node.id))
+        elif isinstance(node, ast.arg) and node.arg in names:
+            hits.append((node.lineno, node.arg))
+        elif isinstance(node, ast.keyword) and node.arg in names:
+            hits.append((node.value.lineno, node.arg))
+        elif isinstance(node, ast.Attribute) and node.attr in names:
+            hits.append((node.lineno, node.attr))
+    return sorted(hits)
+
+
+def test_only_the_boundary_asks_which_platform_runs():
+    """HAS_SIM, IS_HARDWARE and `setup.sim` stay in hal/setup.py, main.py, sim/ and tests/.
+
+    Every other module needs a platform FACT, and asks setup for it by name:
+    `setup.wait`, `setup.scene`, `setup.read_encoders`, `setup.TRACE_BY_DEFAULT`.
+    A module that tests for the simulator has to be edited when the simulator
+    changes, and that is how 38 checks spread over nine files.
+    """
+    allowed = ("hal/setup.py", "main.py")
+    offenders = []
+    for path in _every_source_file():
+        if path in allowed or path.startswith(("sim/", "tests/")):
+            continue
+        with open(os.path.join(PACKAGE_DIR, path)) as handle:
+            for line, name in _platform_checks(handle.read(), path):
+                offenders.append("{}:{} reads {}".format(path, line, name))
+    assert not offenders, offenders
+    print("\u2713 test_only_the_boundary_asks_which_platform_runs passed")
+
+
+def test_the_platform_check_finds_what_it_is_meant_to_find():
+    """Proves the check above can fail: each form of the test is caught."""
+    for source in ("HAS_SIM = setup.sim is not None",
+                   "if setup.IS_HARDWARE:\n    pass",
+                   "from hal.setup import IS_HARDWARE",
+                   "x = setup.sim.get_mouse_state()"):
+        assert _platform_checks(source), source
+    assert not _platform_checks("setup.wait(1)\nsetup.scene().pose()\nsim = 3"), \
+        "a name that is not a platform check was flagged"
+    print("\u2713 test_the_platform_check_finds_what_it_is_meant_to_find passed")
+
+
+def test_the_renderer_stays_inside_sim():
+    """The motor boundary and the executor carry no renderer: `render_object` is sim/ and tests/ only."""
+    offenders = []
+    for path in _every_source_file():
+        if path.startswith(("sim/", "tests/")):
+            continue
+        for line, name in _names_in_source(path, ("render_object", "make_renderer")):
+            offenders.append("{}:{} uses {}".format(path, line, name))
+    assert not offenders, offenders
+    print("\u2713 test_the_renderer_stays_inside_sim passed")
 
 
 def test_documented_paths_point_somewhere_real():
@@ -330,34 +434,44 @@ def test_committed_fixtures_parse():
 
 
 def test_working_files_are_not_tracked():
-    """belief.num and route.mmc are run artefacts, not fixtures."""
+    """Nothing under runs/ is tracked, and nothing a run writes is at root.
+
+    The package root holds source and committed fixtures only. A `runs/` path in
+    `git ls-files` means an artefact was committed; a bare one at root means a
+    writer bypassed `config._run_path` and wrote where it used to.
+    """
     tracked = subprocess.run(["git", "ls-files"], cwd=PACKAGE_DIR,
                              capture_output=True, text=True).stdout.split("\n")
-    for artefact in ("belief.num", "route.mmc", "motor_log.csv", "lap_soak.csv"):
+    for artefact in ("belief.num", "route.mmc", "motor_log.csv", "lap_soak.csv",
+                     "max_speed_test.csv", "max_speed_samples.csv"):
         assert artefact not in tracked, artefact
+        assert "runs/" + artefact not in tracked, "runs/" + artefact
+    assert not [path for path in tracked if path.startswith("runs/")], \
+        "runs/ is gitignored: nothing in it may be committed"
     print("✓ test_working_files_are_not_tracked passed")
 
 
 def test_constants_md_names_every_constant():
-    """config.py says what a number is; CONSTANTS.md says how far to trust it.
+    """config.py and sim/render_config.py say what a number is; CONSTANTS.md says how far to trust it.
 
-    Fails when config.py gains a constant the document does not name.
+    Fails when either file gains a constant the document does not name.
     """
-    with open(os.path.join(PACKAGE_DIR, "config.py")) as handle:
-        source = handle.read()
     with open(os.path.join(PACKAGE_DIR, "CONSTANTS.md")) as handle:
         document = handle.read()
     declared = []
-    for node in ast.parse(source).body:
-        targets = node.targets if isinstance(node, ast.Assign) else []
-        for target in targets:
-            if isinstance(target, ast.Name) and target.id.isupper():
-                declared.append(target.id)
-        if isinstance(node, ast.Try):
-            for inner in node.body + [n for h in node.handlers for n in h.body]:
-                for target in getattr(inner, "targets", []):
-                    if isinstance(target, ast.Name) and target.id.isupper():
-                        declared.append(target.id)
+    for source_path in ("config.py", os.path.join("sim", "render_config.py")):
+        with open(os.path.join(PACKAGE_DIR, source_path)) as handle:
+            source = handle.read()
+        for node in ast.parse(source).body:
+            targets = node.targets if isinstance(node, ast.Assign) else []
+            for target in targets:
+                if isinstance(target, ast.Name) and target.id.isupper():
+                    declared.append(target.id)
+            if isinstance(node, ast.Try):
+                for inner in node.body + [n for h in node.handlers for n in h.body]:
+                    for target in getattr(inner, "targets", []):
+                        if isinstance(target, ast.Name) and target.id.isupper():
+                            declared.append(target.id)
     missing = sorted({name for name in declared if name not in document})
     assert not missing, "CONSTANTS.md does not mention: " + ", ".join(missing)
     print("\u2713 test_constants_md_names_every_constant passed")
@@ -380,9 +494,12 @@ TESTS = (
     test_every_package_ships_its_init,
     test_the_deployment_set_exists,
     test_the_deployment_set_is_closed_under_imports,
-    test_bench_test_is_not_imported_at_module_scope,
+    test_tools_are_not_imported_at_module_scope,
     test_pygame_stays_inside_sim,
     test_only_setup_probes_the_platform,
+    test_only_the_boundary_asks_which_platform_runs,
+    test_the_platform_check_finds_what_it_is_meant_to_find,
+    test_the_renderer_stays_inside_sim,
     test_documented_paths_point_somewhere_real,
     test_committed_fixtures_parse,
     test_working_files_are_not_tracked,

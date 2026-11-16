@@ -17,6 +17,7 @@ if PACKAGE_DIR not in sys.path:
 
 import config
 from brain.maze import MazeStructure
+from sim import render_config
 
 try:
     import pygame  # noqa: F401
@@ -35,8 +36,8 @@ def test_a_renderer_constructs_at_every_grid_size():
     for cols, rows in ((3, 3), (6, 6), (16, 16), (3, 6), (32, 32), (1, 1)):
         view = _view(cols, rows)
         tile = tile_px_for(cols, rows)
-        expected = (cols * tile + 2 * config.RENDER_MARGIN_PX,
-                    rows * tile + 2 * config.RENDER_MARGIN_PX)
+        expected = (cols * tile + 2 * render_config.RENDER_MARGIN_PX,
+                    rows * tile + 2 * render_config.RENDER_MARGIN_PX)
         assert view.screen.get_size() == expected, (cols, rows, view.screen.get_size())
     print("✓ test_a_renderer_constructs_at_every_grid_size passed")
 
@@ -45,9 +46,9 @@ def test_the_tile_scale_stays_clickable_and_bounded():
     """A fixed scale served 16x16 alone: a 3x3 was a 135 px window."""
     for cols, rows in ((1, 1), (3, 3), (6, 6), (16, 16), (32, 32), (3, 16)):
         tile = tile_px_for(cols, rows)
-        assert config.RENDER_MIN_TILE_PX <= tile <= config.RENDER_MAX_TILE_PX, (cols, rows, tile)
+        assert render_config.RENDER_MIN_TILE_PX <= tile <= render_config.RENDER_MAX_TILE_PX, (cols, rows, tile)
         longest_px = tile * max(cols, rows)
-        assert longest_px <= config.RENDER_TARGET_WINDOW_PX or tile == config.RENDER_MIN_TILE_PX
+        assert longest_px <= render_config.RENDER_TARGET_WINDOW_PX or tile == render_config.RENDER_MIN_TILE_PX
     assert tile_px_for(3, 3) > tile_px_for(16, 16), "a small grid must draw bigger cells"
     print("✓ test_the_tile_scale_stays_clickable_and_bounded passed")
 
@@ -83,7 +84,7 @@ def test_draw_survives_every_optional_argument():
     view.draw(belief)
     view.draw(belief, path=path)
     view.draw(belief, path=path, done=[(0, 0)])
-    view.draw(belief, path=path, highlight={(1, 1): config.RENDER_TILE_END})
+    view.draw(belief, path=path, highlight={(1, 1): render_config.RENDER_TILE_END})
     print("✓ test_draw_survives_every_optional_argument passed")
 
 

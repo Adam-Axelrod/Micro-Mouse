@@ -98,6 +98,7 @@ class LapLog:
 
     def open(self, note=""):
         is_new = not files.file_exists(self.path)
+        files.ensure_dir(self.path)
         try:
             self._file = open(self.path, "a")
             if is_new:

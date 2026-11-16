@@ -1,5 +1,6 @@
 import os
 import config
+import files
 
 
 class MazeStructure:
@@ -63,6 +64,7 @@ def num_file_export(path_str, cells):
     """Write a cells dict to a .num maze file."""
     cols = max(x for x, y in cells) + 1
     rows = max(y for x, y in cells) + 1
+    files.ensure_dir(path_str)
     with open(path_str, "w") as file_handle:
         for x in range(cols):
             for y in range(rows):

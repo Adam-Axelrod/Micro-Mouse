@@ -90,8 +90,12 @@ def test_a_second_run_appends_without_a_second_header():
 
 
 def test_a_log_that_will_not_open_degrades_instead_of_raising():
-    log = lap_log.LapLog(os.path.join(tempfile.gettempdir(), "no_such_dir", "x.csv"))
-    assert not log.open(), "opening a path with no directory should fail"
+    # Two levels missing, not one: `files.ensure_dir` creates the runs/ directory
+    # a soak writes into, and it creates ONE level. A missing grandparent is what
+    # is left of this failure mode, and the log must still degrade, not raise.
+    log = lap_log.LapLog(
+        os.path.join(tempfile.mkdtemp(), "no_such_dir", "deeper", "x.csv"))
+    assert not log.open(), "opening a path with no grandparent should fail"
     assert log.error, "the reason must be kept for the operator"
     assert not log.record(1, 1.0, None, None, None, None), "a dead log records nothing"
     log.close()

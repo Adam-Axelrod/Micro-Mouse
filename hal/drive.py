@@ -14,53 +14,23 @@ a *driver* is what left `bench_test` and `replay_log` calling
 Durations are NOT computed here. `motion.py` turns a distance or an angle into
 a number of seconds; this module holds a power for however long it is told to.
 
-Pico-portable: `time`, `config`, `setup`, `motor_log` only.
+Pico-portable: `time`, `config`, `setup` only.
 """
 
 import time
 
 import config
-from record import motor_log
 from hal import setup
-
-HAS_SIM = setup.sim is not None
 
 CRUISE_DUTY_POWER = config.CRUISE_DUTY_POWER
 TURN_DUTY_POWER = config.TURN_DUTY_POWER
 
-# Draw one frame in this many physics steps. Render-only; it never gates physics.
-RENDER_EVERY_N_STEPS = 4
-
 # Full 16-bit duty. Active-low drive, so this value is a channel OFF.
 MAX_DUTY = 65535
 
-MOTOR_TRACE = motor_log.MotorLog(
-    config.MOTOR_LOG_PATH,
-    clock_ms=setup.sim.sim_time_ms if setup.sim is not None else None,
-)
-
-
-def start_trace(force=False):
-    """Begin recording commanded motor powers to config.MOTOR_LOG_PATH.
-
-    Idempotent, so a mode may call it without knowing whether `main` already did.
-    On the Pico there is no renderer and no sim, so a run is otherwise invisible
-    and the trace is ON BY DEFAULT; on the PC it costs a file for nothing unless
-    the caller asks for it with `--log`.
-    """
-    if MOTOR_TRACE.is_recording():
-        return MOTOR_TRACE
-    if force or not HAS_SIM:
-        MOTOR_TRACE.start()
-        # Record the resting state so the first real power change has a baseline
-        # to be a change FROM. Without it the trace starts mid-motion.
-        MOTOR_TRACE.record(0.0, 0.0)
-    return MOTOR_TRACE
-
-
-def stop_trace():
-    """Close the trace file. Safe to call when nothing was ever started."""
-    MOTOR_TRACE.close()
+# None, or a function of (left_power, right_power). drive_motors and stop_motors
+# call it with the clamped powers. `record.motor_log` sets it to trace a run.
+power_listener = None
 
 
 def blink_led(times, on_duration_ms=100, off_duration_ms=None):
@@ -83,7 +53,8 @@ def drive_motors(left_power, right_power):
     left_p = max(-1.0, min(1.0, left_power))
     right_p = max(-1.0, min(1.0, right_power))
 
-    MOTOR_TRACE.record(left_p, right_p)
+    if power_listener is not None:
+        power_listener(left_p, right_p)
 
     if left_p >= 0:
         setup.leftRev.duty_u16(MAX_DUTY)
@@ -102,44 +73,20 @@ def drive_motors(left_power, right_power):
 
 def stop_motors():
     """Both channels of both motors at full duty: a BRAKE, not a coast (BT-3)."""
-    MOTOR_TRACE.record(0.0, 0.0)
+    if power_listener is not None:
+        power_listener(0.0, 0.0)
     setup.leftFwd.duty_u16(MAX_DUTY)
     setup.leftRev.duty_u16(MAX_DUTY)
     setup.rightFwd.duty_u16(MAX_DUTY)
     setup.rightRev.duty_u16(MAX_DUTY)
 
 
-def run_motion_for(duration_seconds, render_object=None, belief=None, route=None):
-    """Let time pass while the motors drive.
-
-    On the Pico this sleeps. On the PC it steps the sim instead, so wall-clock
-    time and sim time diverge completely -- which is why MOTOR_TRACE is given the
-    sim's clock above.
-    """
-    if not HAS_SIM:
-        time.sleep(duration_seconds)
-        return
-
-    dt = config.SIM_TIMESTEP_S
-    # Whole steps plus the leftover. Rounding to whole steps instead put a
-    # systematic error on every short move -- a 0.216 s pivot became 0.22 s and
-    # turned 91.6 degrees -- which would show up as sim/hardware divergence that
-    # the hardware had not actually caused.
-    total_steps = int(duration_seconds / dt)
-    remainder = duration_seconds - total_steps * dt
-    for step_index in range(total_steps):
-        setup.sim.step_sim_physics(dt)
-        if render_object is not None and (
-            step_index % RENDER_EVERY_N_STEPS == 0 or step_index == total_steps - 1
-        ):
-            render_object.draw(belief=belief, mouse=setup.sim.get_mouse_state(), path=route)
-
-    if remainder > 0.0:
-        setup.sim.step_sim_physics(remainder)
+def run_motion_for(duration_seconds):
+    """Let time pass while the motors drive: `setup.wait`, whichever platform runs."""
+    setup.wait(duration_seconds)
 
 
-def pivot_for(seconds, clockwise=True, render_object=None, belief=None,
-              route=None, power=None):
+def pivot_for(seconds, clockwise=True, power=None):
     """Spin on the spot for `seconds` at `power`. Actuation only.
 
     The DURATION is computed by `motion.py`, which is the one place a distance
@@ -151,5 +98,5 @@ def pivot_for(seconds, clockwise=True, render_object=None, belief=None,
         power = TURN_DUTY_POWER
     sign = 1.0 if clockwise else -1.0
     drive_motors(sign * power, -sign * power)
-    run_motion_for(seconds, render_object, belief, route)
+    run_motion_for(seconds)
     stop_motors()

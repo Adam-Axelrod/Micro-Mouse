@@ -102,7 +102,7 @@ duty. Mode 4 at `power=0.55` predicts 14.1 s over 5 m if it holds.
 | `MAX_SPEED_TABLE_ROW_MS` | 100 | CHOSEN | One printed table row per this much time. |
 | `MAX_SPEED_TABLE_MIN_ROWS` | 20 | CHOSEN | Print every sample rather than fall below this many rows. |
 
-## Mode 5, the lap soak
+## Mode 4, the lap soak
 
 | Constant | Value | Class | Provenance |
 |---|---|---|---|
@@ -115,7 +115,7 @@ duty. Mode 4 at `power=0.55` predicts 14.1 s over 5 m if it holds.
 | `SOAK_TICK_DROPOUT_FRACTION` | 0.5 | CHOSEN | Below this fraction of the median lap is reported as an encoder dropout, not a slow lap. Generous, because battery sag over 30 laps is real. |
 | `SOAK_SLOWDOWN_WARN_PERCENT` | -5.0 | CHOSEN | First-to-last tick change that gets reported as battery sag. |
 
-## Mode 6, follow route
+## Mode 4, explicit follow-route calls
 
 | Constant | Value | Class | Provenance |
 |---|---|---|---|
@@ -171,21 +171,25 @@ Pico because `PACKAGE_DIR` is `""` there and MicroPython has no `os.path`.
 | Constant | File | Note |
 |---|---|---|
 | `PACKAGE_DIR` | — | `""` on the Pico, the repository root on the PC. |
-| `DEFAULT_MAZE` | `groundtruth.num` | Sim truth. Committed. |
-| `SAVED_BELIEF_MAZE` | `belief.num` | Run artefact. Gitignored and untracked. |
-| `SAVED_ROUTE` | `route.mmc` | Run artefact. Copy the fixture you mean to drive. |
+| `RUNS_DIR` | `runs/` | Everything a run writes. Gitignored. `files.ensure_dir` creates it. |
+| `DEFAULT_MAZE` | `mazes/groundtruth.num` | Sim truth. Committed. |
+| `SAVED_BELIEF_MAZE` | `runs/belief.num` | Run artefact. Gitignored and untracked. |
+| `SAVED_ROUTE` | `runs/route.mmc` | Run artefact. Copy the fixture you mean to drive. |
 | `MAZES_DIR` | `mazes/` | Committed fixtures. |
 | `ROUTES_DIR` | `routes/` | Committed fixtures. |
-| `MOTOR_LOG_PATH` | `motor_log.csv` | Run artefact. |
-| `MAX_SPEED_LOG_PATH` | `max_speed_test.csv` | Run artefact, appended per run. |
-| `MAX_SPEED_SAMPLE_LOG_PATH` | `max_speed_samples.csv` | Run artefact, appended per run. |
-| `SOAK_LOG_PATH` | `lap_soak.csv` | Run artefact, one row per lap. |
+| `MOTOR_LOG_PATH` | `runs/motor_log.csv` | Run artefact. |
+| `MAX_SPEED_LOG_PATH` | `runs/max_speed_test.csv` | Run artefact, appended per run. |
+| `MAX_SPEED_SAMPLE_LOG_PATH` | `runs/max_speed_samples.csv` | Run artefact, appended per run. |
+| `SOAK_LOG_PATH` | `runs/lap_soak.csv` | Run artefact, one row per lap. |
+
+The package root holds source and committed fixtures only. A run writes into
+`runs/` on BOTH targets, so the Pico's filesystem has the same shape as the
+repository and every `mpremote` path reads the same on either side.
 
 ## Render and editor
 
-PC-only. `sim/renderer.py` and `sim/route_editor.py` are the only readers and
-neither goes on the board. They live here so invariant 5 holds without an
-exception, not because the Pico will ever read them. All CHOSEN unless marked.
+PC-only. They live in `sim/render_config.py`, which `sim/renderer.py`,
+`sim/scene.py` and `sim/route_editor.py` read. None goes on the board. All CHOSEN unless marked.
 
 **Scale:** `PX_PER_MM` (0.25) is a FALLBACK only. The Renderer picks its own
 scale per maze and stores it on the instance, so pixels stay inside the
@@ -193,7 +197,8 @@ renderer. Reading `PX_PER_MM` outside `sim/renderer.py` is a bug.
 `TILE_PX` is DERIVED from it and `MM_PER_CELL`.
 
 `RENDER_TARGET_WINDOW_PX` 720, `RENDER_MIN_TILE_PX` 24, `RENDER_MAX_TILE_PX` 160,
-`RENDER_MARGIN_PX` 10, `RENDER_FPS` 60, `RENDER_PATH_STEP_DELAY_S` 0.05,
+`RENDER_MARGIN_PX` 10, `RENDER_FPS` 60, `RENDER_EVERY_N_STEPS` 4,
+`RENDER_PATH_STEP_DELAY_S` 0.05,
 `RENDER_DONE_STEP_DELAY_S` 0.025, `RENDER_MOUSE_OUTLINE_PX` 2.
 
 **Colours,** all RGB triples: `RENDER_BACKGROUND`, `RENDER_WALL_KNOWN`,
@@ -213,7 +218,8 @@ visits: `RENDER_ROUTE_LINE_PX` 5, `RENDER_ROUTE_ARROW_FRACTION` 0.16,
 
 **Editor:** `ROUTE_EDITOR_REJECT_FLASH_S` 0.6,
 `ROUTE_EDITOR_DEFAULT_COLS` 3 and `ROUTE_EDITOR_DEFAULT_ROWS` 3 (the physical
-test maze), `ROUTE_EDITOR_START_HEADING` `"n"`.
+test maze). `ROUTE_EDITOR_START_HEADING` `"n"` stays in `config.py`, because
+`modes/follow_route.py` reads it.
 
 ## Before and after a bench run
 
@@ -230,3 +236,9 @@ it does not write them. When you promote one:
 
 - `BODY_LENGTH_MM`, `WALL_LENGTH_MM` and `WALL_WIDTH_MM` have no reader in the
   codebase at all. They are documentation that happens to be executable.
+
+## Powered floor diagnostics
+
+| Constant | Value | Class | Provenance |
+|---|---|---|---|
+| `BENCH_STRAIGHT_CELLS` | 2 | CHOSEN | Victor approved a two-cell (360 mm) BT-9 straight drive on 2026-09-14. Uses existing SOAK drive/turn powers so the checks reproduce stress-test motion. Wrong length changes the test lane and expected travel; it does not calibrate the chassis. |

@@ -15,8 +15,9 @@ from brain import search_algorithms
 import config
 import files
 from hal import drive
+from record import motor_log
+from hal import setup
 import motion
-import world
 
 
 def load_and_plan_route(belief_file_path=None, start_heading=config.DIRECTIONS[0]):
@@ -41,15 +42,16 @@ def load_and_plan_route(belief_file_path=None, start_heading=config.DIRECTIONS[0
 def run(enable_render=False):
     """Run speed run mode."""
     print("=== STARTING SPEED RUN MODE ===")
-    drive.start_trace()
+    motor_log.start_trace()
     drive.blink_led(2, 80)
 
     route, movement_commands, belief = load_and_plan_route()
     print("Optimal cell path ({} cells): {}".format(len(route), route))
 
-    render_object, _real_maze = world.sim_world(enable_render=enable_render)
+    scene = setup.scene(render=enable_render)
+    scene.show(belief=belief, route=route)
 
-    motion.execute(movement_commands, render_object, belief, route)
+    motion.execute(movement_commands)
 
 
 if __name__ == "__main__":

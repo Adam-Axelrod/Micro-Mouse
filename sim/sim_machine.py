@@ -91,8 +91,12 @@ def step_sim_physics(delta_time_seconds=config.SIM_TIMESTEP_S):
 
 
 def sim_time_ms():
-    """Milliseconds of SIMULATED time since import, advanced only by stepping."""
-    return int(simulation_engine.elapsed_seconds * 1000.0)
+    """Milliseconds of SIMULATED time since import, advanced only by stepping.
+
+    The seconds are a float sum, so 0.07 s can be 0.06999999999999999. Rounding
+    to whole microseconds first keeps that noise from reading as 69 ms.
+    """
+    return round(simulation_engine.elapsed_seconds * 1000000.0) // 1000
 
 class SimEncoders:
     """Tick counters read off the simulated pose.

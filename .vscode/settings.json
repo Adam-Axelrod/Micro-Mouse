@@ -6,6 +6,9 @@
     },
     "python.terminal.activateEnvironment": false,
     "micropico.openOnStart": true,
+    "micropico.autoConnect": false,
+    "micropico.syncFileTypes": ["py", "txt", "log", "json", "xml", "html", "js", "css", "mpy", "mmc", "num"],
+    "micropico.manualComDevice": "/dev/tty.usbmodem11201",
     "python.analysis.typeshedPaths": [
         "~/.micropico-stubs/included"
     ],

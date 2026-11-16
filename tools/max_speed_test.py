@@ -1,4 +1,4 @@
-"""Max speed test (mode 4) for the UKMARS Gemini micromouse.
+"""Max speed dash instrument (REPL only) for the UKMARS Gemini micromouse.
 
 `MAX_WHEEL_SPEED_MMS` has never been measured. Every open-loop `F n` duration
 divides by it, so every distance the robot drives inherits its error. This mode
@@ -23,12 +23,12 @@ a floor measurement: only the tape says what the chassis does.
 
     On the Pico, from the REPL:
 
-        from modes import max_speed_test
+        from tools import max_speed_test
         max_speed_test.run()                      # 5.2 m at full duty
         max_speed_test.run(distance_mm=3000)      # shorter dash
         max_speed_test.run(power=0.55)            # at cruise duty instead
 
-Every run appends a row to `max_speed_test.csv` on the Pico's filesystem.
+Every run appends a row to `runs/max_speed_test.csv` on the Pico's filesystem.
 
 The dash also POLLS THE ENCODERS while it drives, every
 `config.MAX_SPEED_SAMPLE_INTERVAL_MS`, and appends the samples to
@@ -41,19 +41,17 @@ import gc
 import math
 import time
 
-from hal import clock
 import config
 import files
 from hal import drive
+from record import motor_log
 import motion
 from brain import maze
 from hal import setup
 
-HAS_SIM = setup.sim is not None
-
-# Whichever clock this target runs on. `clock` owns the choice.
-_now_ms = clock.now_ms
-_diff_ms = clock.diff_ms
+# Whichever clock this target runs on. `setup` owns the choice.
+_now_ms = setup.now_ms
+_diff_ms = setup.diff_ms
 
 
 LOG_FORMAT_VERSION = 2
@@ -85,6 +83,7 @@ ENCODER_TOLERANCE = 0.02
 def _append_log_row(row_text):
     """Append one result row, writing the header first if the file is new."""
     is_new = not files.file_exists(config.MAX_SPEED_LOG_PATH)
+    files.ensure_dir(config.MAX_SPEED_LOG_PATH)
     try:
         with open(config.MAX_SPEED_LOG_PATH, "a") as file_handle:
             if is_new:
@@ -138,8 +137,8 @@ def _drive_sampled(power, commanded_seconds, has_encoders):
       * With no decoder there is nothing to poll, so the dash runs as one
         uninterrupted sleep exactly as it did before.
 
-    On the PC `drive.run_motion_for` steps sim physics instead of sleeping, and
-    `_now_ms` is already the sim clock, so the same loop times both targets.
+    `setup.wait` sleeps on the robot and steps the simulated physics on the PC,
+    and `_now_ms` is the matching clock, so the same loop times both targets.
     """
     interval_ms = config.MAX_SPEED_SAMPLE_INTERVAL_MS
     capacity = config.MAX_SPEED_SAMPLE_LIMIT
@@ -165,12 +164,9 @@ def _drive_sampled(power, commanded_seconds, has_encoders):
             if deadline_ms > total_ms:
                 deadline_ms = total_ms
 
-            if HAS_SIM:
-                drive.run_motion_for((deadline_ms - elapsed_ms) / 1000.0)
-            else:
-                remaining_ms = deadline_ms - _diff_ms(_now_ms(), start_ms)
-                if remaining_ms > 0:
-                    time.sleep(remaining_ms / 1000.0)
+            remaining_ms = deadline_ms - _diff_ms(_now_ms(), start_ms)
+            if remaining_ms > 0:
+                setup.wait(remaining_ms / 1000.0)
             elapsed_ms = deadline_ms
 
             if count < capacity:
@@ -195,6 +191,7 @@ def _write_samples(count, times_ms, left_ticks, right_ticks, power, distance_mm)
     if count <= 0:
         return
     is_new = not files.file_exists(config.MAX_SPEED_SAMPLE_LOG_PATH)
+    files.ensure_dir(config.MAX_SPEED_SAMPLE_LOG_PATH)
     try:
         with open(config.MAX_SPEED_SAMPLE_LOG_PATH, "a") as file_handle:
             if is_new:
@@ -343,7 +340,8 @@ def report_ramp(samples=None, stride_ms=None):
 def run(distance_mm=None, power=None, enable_render=False):
     """Drive one straight dash at full duty, brake hard, and report the timing."""
     distance_mm, power, assumed_speed_mms, commanded_seconds = plan(distance_mm, power)
-    drive.start_trace()
+    motor_log.start_trace()
+    scene = setup.scene()
 
     print("=== MAX SPEED TEST ===")
     print("Clear a straight lane of at least {:.2f} m.".format((distance_mm + 500.0) / 1000.0))
@@ -408,7 +406,7 @@ def run(distance_mm=None, power=None, enable_render=False):
 
     print("")
     print("Now read the floor, then call calibrate() with what you measured:")
-    print("    import max_speed_test")
+    print("    from tools import max_speed_test")
     print("    max_speed_test.calibrate(travelled_mm=<nose to nose>, stopwatch_s=<t>)")
     print("  travelled_mm = start line to where the nose actually stopped")
     print("  stopwatch_s  = your time over the 5.00 m mark (marked_mm, default 5000)")
@@ -424,9 +422,9 @@ def run(distance_mm=None, power=None, enable_render=False):
             sample_count, config.MAX_SPEED_SAMPLE_LOG_PATH))
         report_ramp()
 
-    if HAS_SIM:
-        state = setup.sim.get_mouse_state()
-        travelled_mm = state.y_mm - config.MM_PER_CELL / 2.0
+    pose = scene.pose()
+    if pose is not None:
+        travelled_mm = pose[1] - config.MM_PER_CELL / 2.0
         print("Sim travelled {:.0f} mm of the {:.0f} mm commanded ({:+.1f}%).".format(
             travelled_mm, distance_mm, (travelled_mm / distance_mm - 1.0) * 100.0))
         print("  The sim drives at SIM_TRUE_WHEEL_SPEED_MMS and plans at")
@@ -461,7 +459,7 @@ def calibrate(travelled_mm=None, stopwatch_s=None, marked_mm=5000.0,
                     or the tyre is compressing (worth only tenths of a mm).
 
     Ticks default to the last run in this session. Pass them by hand to work
-    from a row of max_speed_test.csv instead.
+    from a row of runs/max_speed_test.csv instead.
     """
     if left_ticks is None or right_ticks is None:
         if LAST_RUN is None:
